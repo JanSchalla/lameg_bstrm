@@ -170,7 +170,6 @@ for b=1:nfolds
     rmstot  = 0;
     fracterr = 0;
 
-    %
     for trial = 1:length(sFiles)
         % load original sensor data 
         data_struct_orig = in_bst_data(sFiles{trial});
@@ -178,13 +177,10 @@ for b=1:nfolds
         %reconstruct sensor data based on training kernel
         source_training = resultMat.ImagingKernel * data_struct_orig.F(resultMat.GoodChannel, :);
 
-
-        source2 = inv_kernel * source_training;
         % Backproject to all sensors
         y_pred_full = L * source_training;
         % Take only test channels 
         y_pred = y_pred_full(test_chans, :);
-
 
         err2 = (y_pred - data_struct_orig.F(test_chans, :)).^2;
         sig2 = data_struct_orig.F(test_chans, :).^2;

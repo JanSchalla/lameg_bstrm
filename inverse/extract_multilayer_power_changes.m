@@ -1,16 +1,28 @@
-function extract_multilayer_power_changes(sFiles)
+function extract_multilayer_power_changes(sFiles, params)
+
+% Set defaults
+extract_params = {};
+% Parse inputs
+if exist('params', 'var') && ~isempty(params)
+    if isfield(params, 'extract_params')
+        extract_params = params.extract_params;
+    end
+end
 
 tf_template = create_bstrm_tf_template();
 % sFiles cell of relaitves pathes to the trial data from the brainstorm db
 sData = in_bst_data(sFiles{1});
 time = sData.Time;
 clear sData
-%% 1st: Let user define baseline, window of interest (woi) and frequency of interest (foi).
-dlgTitle = 'Specify multilayer extraction parameter';
-fieldsize = [10 50];
-prompt = 'freq id/ freq range / BL win / WOI / extraction function';
-example = {'theta / 4, 8 / -0.5, -0.1 / 0, 1 / hilbert'};
-answer = inputdlg(prompt, dlgTitle, fieldsize, example);
+
+if isempty(extract_params)
+    %% 1st: Let user define baseline, window of interest (woi) and frequency of interest (foi).
+    dlgTitle = 'Specify multilayer extraction parameter';
+    fieldsize = [10 50];
+    prompt = 'freq id/ freq range / BL win / WOI / extraction function';
+    example = {'theta / 4, 8 / -0.5, -0.1 / 0, 1 / hilbert'};
+    answer = inputdlg(prompt, dlgTitle, fieldsize, example);
+end
 
 jobs = cellstr(answer{:});
 sfreq = round(1/(time(2) - time(1)));
@@ -36,7 +48,7 @@ for ses=1:length(ses_ids)
     end
     tokens = split(bstrm_path, separator);
     protocol_id = find(ismember(tokens, "brainstorm_db"), 1) + 1;
-    % chekc if previous path was relative
+    % check if previous path was relative
     if isempty(protocol_id)
         bstrm_path = file_fullpath(bstrm_path);
         % Redo if previous path was relative
@@ -107,14 +119,11 @@ for ses=1:length(ses_ids)
     ses_template.nAvg = 1;
     ses_template.Leff = 1;
 
-    pial_baseline_ses = zeros(nVertices, sesTrials);
-    white_baseline_ses = zeros(nVertices, sesTrials);
-    pial_vals_ses = zeros(nVertices, sesTrials);
-    white_vals_ses = zeros(nVertices, sesTrials);
-
-    f = waitbar(0, 'Extracting surface specific power');
+    disp('Starting extraction ...');
+    fprintf('Progress: %3d%%\n', 0);
     for iTrial = 1:sesTrials
-        waitbar(iTrial/sesTrials, f, sprintf('Extracting surface specific power: %d %%', floor(iTrial/sesTrials*100)));
+
+        fprintf(1, '\b\b\b\b%3.0f%%', 100*(iTrial/sesTrials));
         % Load data for each trial
         [~, trial_id] = fileparts(session_files{ses}{iTrial});
         sRawData = in_bst_data(session_files{ses}{iTrial});
@@ -166,14 +175,6 @@ for ses=1:length(ses_ids)
             end
             ses_template.Freqs{end, 2} = char(join(string(job_struct.freq_range), ','));
             ses_template.Freqs{end, 3} = char(job_struct.function);
-
-            % ses_template.TimeBands{end, 1} = char(strcat(job_struct.id, '_baseline'));
-            % ses_template.TimeBands{end, 2} = char(join(string(job_struct.base_win), ','));
-            % ses_template.TimeBands{end, 3} = char('mean');
-
-            % ses_template.TimeBands{end+1, 1} = char(strcat(job_struct.id, '_woi'));
-            % ses_template.TimeBands{end, 2} = char(join(string(job_struct.woi), ','));
-            % ses_template.TimeBands{end, 3} = char('mean');
             
             % bring time information in sample space
             [~, base_min_idx] = min(abs(time - job_struct.base_win(1)));
@@ -187,7 +188,6 @@ for ses=1:length(ses_ids)
             clear('woi_min_idx', "woi_max_idx");
 
             % extract job specific data
-            %% Here happens the "magic"
             source_data_bp = bandpass(source_data', job_struct.freq_range, sfreq);
 
             source_data_power = abs(hilbert(source_data_bp)).^2;
@@ -197,7 +197,6 @@ for ses=1:length(ses_ids)
     
             power_change = woi_power - base_power;
             
-            %% And here stops it already
             ses_template.TF(:, 1, job) = power_change;
 
             ses_template.Comment = char(join([ses_template.Comment trial_id "multilayer power change"], " | "));
@@ -219,5 +218,4 @@ for ses=1:length(ses_ids)
         % them outside of the database
         save(fullfile(bstrm_out_path, out_fname), '-struct', 'ses_template');
     end
-    close(f)
 end
