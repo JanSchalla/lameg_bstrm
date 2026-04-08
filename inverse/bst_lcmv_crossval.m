@@ -104,7 +104,7 @@ for b=1:nfolds
     fprintf('Setting channels as bad: \n%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,\n%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,\n%s, %s, %s, %s, %s, %s, %s, %s, %s\n', channels.Channel(test_chans(:)).Name)%, channels.Channel(folds{b}(2)).Name)
     data_struct.ChannelFlag(test_chans) = -1;
 
-    % here alway sFiles{1} is altered to have the test channels marked as
+    % here always sFiles{1} is altered to have the test channels marked as
     % bad.
     %% Be carefull when debugging to always change it back to the original
     %% valid_chans!!
@@ -169,9 +169,12 @@ for b=1:nfolds
     errpred = 0;
     rmstot  = 0;
     fracterr = 0;
+    
+    disp('Calculating crossvalidation matrics ...');
+    fprintf('Progress: %3d%%\n', 0);
+    for iTrial = 1:length(sFiles)
+        fprintf(1, '\b\b\b\b%3.0f%%', 100*(iTrial/length(sFiles)));
 
-    %
-    for trial = 1:length(sFiles)
         % load original sensor data 
         data_struct_orig = in_bst_data(sFiles{trial});
 
