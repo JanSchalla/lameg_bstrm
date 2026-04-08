@@ -1,4 +1,4 @@
-function compare_power_change_subject(sFiles, params)
+function [contrast_name, t_vals, p_vals] = compare_power_change_subject(sFiles, params)
 
 % Set defaults
 roi_cutoff = 60;
