@@ -103,6 +103,25 @@ vertices_per_surface = numel(I);
 
 ds_firstSurf = file_fullpath(ds_firstSurf);
 
+% Ask the user if scouts should be created
+resp = questdlg('Do you want to create individual scouts now?', ...
+                'Create Scouts', ...
+                'Yes','No','No');
+
+if strcmp(resp,'Yes')
+    % Open the surface in Brainstorm viewer
+    hFig = view_surface(ds_firstSurf);
+    bst_figures('SetCurrentFigure', hFig);     % optional, make it active
+    
+    % Optional message to guide the user
+    disp('Surface opened. Use Brainstorm GUI: Scouts > Create scout.');
+        
+    % Ask the user if scouts should be created
+    disp('Surface opened. Create/edit scouts in Brainstorm, then press any key here to continue...');
+    pause;    % waits for key press in command window
+    disp('Continuing script after scout editing (Make sure to close the brainstorm figure to copy scouts to other layers!.');
+end
+
 % Load in downsampled surface
 TessMat_wm_ds = in_tess_bst(ds_firstSurf);
 
