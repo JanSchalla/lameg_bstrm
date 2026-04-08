@@ -1,14 +1,27 @@
-function compare_power_change_subject(sFiles, varargin)
+function compare_power_change_subject(sFiles, params)
 
 % Set defaults
-defaults = struct('roi_cutoff', 60, 'tail', 0, 'use_scouts', 0);
+roi_cutoff = 60;
+tail = 0;
+roi = [];
+verbose = true;
+
 % Parse inputs
-params = struct()
-disp('Testing still active. If you want to run this script from another script disable testing!');
-%params = struct(varargin{:});
-for f = fieldnames(defaults)',
-    if ~isfield(params, f{1}),
-        params.(f{1}) = defaults.(f{1});
+if exist('params', 'var') && ~isempty(params)
+    if isfield(params, 'roi_cutoff')
+        roi_cutoff = params.roi_cutoff;
+    end
+
+    if isfield(params, 'tail')
+        tail = params.tail;
+    end
+
+    if isfield(params, 'roi')
+        roi = params.roi;
+    end
+
+    if isfield(params, 'verbose')
+        verbose = params.verbose;
     end
 end
 
@@ -43,26 +56,34 @@ p_vals = zeros(n_contrasts, 1);
 
 for i=1:n_contrasts
 
-    % Compute global roi
-    %% To implement: make thresholding param variable based on user input, make other options of defining ROIs possible e.g. via Scouts!
-    if ~params.use_scouts
+    if isempty(roi)
+        % Compute global roi
         pial_avg = mean(pial_diff(:, 1, i), 2);
-        pial_thresh = prctile(pial_avg, params.roi_cutoff);
+        pial_thresh = prctile(pial_avg, roi_cutoff);
         pial_mask = pial_avg > pial_thresh;
         % Use Leadfield
         white_avg = mean(white_diff(:, 1, i), 2);
-        white_thresh = prctile(white_avg, params.roi_cutoff);
+        white_thresh = prctile(white_avg, roi_cutoff);
         white_mask = white_avg > white_thresh;
     else
-        % Do something
+        % Compute roi based on specified scout
+        pial_mask = zeros(size(pial_diff, 1), 1);
+        pial_mask(roi) = true; 
+        % Use Leadfield
+        white_mask = zeros(size(pial_diff, 1), 1);
+        white_mask(roi) = true;    
     end
     
-    
     multilayer_mask = pial_mask | white_mask;
-    fprintf('%i vertices (%.2f%s of all vertices) are included in comparison.\n', sum(multilayer_mask), sum(multilayer_mask)/length(multilayer_mask), '%');
+    fprintf('%i vertices (%.2f%s of all vertices) are included in comparison.\n', sum(multilayer_mask), 100*(sum(multilayer_mask)/length(multilayer_mask)), '%');
 
     % Average over over vertices in ROI
-    avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i));
+    if sum(multilayer_mask) == 1
+        avg_trial_change = pial_white_diff(multilayer_mask, :, i);
+    else
+        avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i), 2);
+    end    
+    
     contrast_name{i} = sTrial.Freqs{i};
 
     % compare vertex activity against 0 -> adapted std of population
@@ -74,8 +95,9 @@ for i=1:n_contrasts
     % Nachdenken!
     [t_vals(i), p_vals(i)] = ttest_corrected(avg_trial_change, 'correction', 10e-4*max(var(pial_white_diff(multilayer_mask, :, ii), [], 2)), ...
         'tail', 0);
+
+    if verbose
+        fprintf('Condition: %s\n', contrast_name{i});
+        fprintf('t-value: %.3f, p-value: %.3f\n\n', t_vals(i), p_vals(i));
+    end
 end
-
-disp(t_vals);
-disp(p_vals);
-
