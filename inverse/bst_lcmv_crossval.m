@@ -181,13 +181,16 @@ for b=1:nfolds
         %reconstruct sensor data based on training kernel
         source_training = resultMat.ImagingKernel * data_struct_orig.F(resultMat.GoodChannel, :);
 
-
-        source2 = inv_kernel * source_training;
         % Backproject to all sensors
+        % This produces unequal scaling between real and predicted sensor
+        % data. When using (1./Sa) * (kernel * sensors) to calculate
+        % sources and then projecting L * sources then predicted and real 
+        % sensors get more close to each other (~3 orders of magnitudes 
+        % different). Could this be because in process_inverse_2018.m L564
+        % projectors are applied to the head model?
         y_pred_full = L * source_training;
         % Take only test channels 
         y_pred = y_pred_full(test_chans, :);
-
 
         err2 = (y_pred - data_struct_orig.F(test_chans, :)).^2;
         sig2 = data_struct_orig.F(test_chans, :).^2;
@@ -210,16 +213,25 @@ crossval_results.allrms = allrms;
 crossval_results.allfract = allfract;
 crossval_results.test_chans_per_fold = folds;
 
+% =========================================================================
+%% Summary plots
+% =========================================================================
+figure('Name', 'Cross-validation summary');
 
+subplot(2,2,1);
+boxplot(crosserr', 'Labels', arrayfun(@(i) sprintf('F%d',i), 1:nfolds, 'UniformOutput', false));
+ylabel('RMS error (T)'); title('Prediction error per fold');
 
-h = plot(crossval_results.crosserr) %Error between the predicted and measured data (squared)
-rowNames = arrayfun(@(i) sprintf('Fold-%d', i), 1:10, 'UniformOutput', false);
-legend(h, rowNames, 'Location', 'best');
+subplot(2,2,2);
+boxplot(allrms', 'Labels', arrayfun(@(i) sprintf('F%d',i), 1:nfolds, 'UniformOutput', false));
+ylabel('R^2'); title('Explained variance per fold');
+yline(0, 'k--');
 
-h = plot(crossval_results.allrms) %squared amplitude of measured signal
-rowNames = arrayfun(@(i) sprintf('Fold-%d', i), 1:10, 'UniformOutput', false);
-legend(h, rowNames, 'Location', 'best');
+subplot(2,2,3);
+boxplot(allfract', 'Labels', arrayfun(@(i) sprintf('F%d',i), 1:nfolds, 'UniformOutput', false));
+ylabel('Fractional RMS error'); title('Relative error per fold');
 
-h = plot(crossval_results.allfract) % difference between the actual measured amplitude and the error
-rowNames = arrayfun(@(i) sprintf('Fold-%d', i), 1:10, 'UniformOutput', false);
-legend(h, rowNames, 'Location', 'best');
+subplot(2,2,4);
+imagesc(allrms); colorbar; colormap(flipud(hot));
+xlabel('Test channel rank'); ylabel('Fold');
+title('R^2 per fold x channel');
