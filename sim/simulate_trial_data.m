@@ -5,6 +5,26 @@ options = struct();
 options.sim_params = sim_params;
 options.used_headmodel = headmodel_fname;
 
+% Check sim_params to be congruent
+n_locs = size(sim_params.sim_loc, 1);
+n_woi = size(sim_params.woi, 1);
+n_foi = size(sim_params.foi, 1);
+ns = size(data_struct.Time, 2);
+
+if n_locs == 1
+    % Single location: both woi and foi must also be scalars / single rows.
+    if ~(n_woi == 1 && n_foi == 1)
+        error(['simulate_trial_data: only one location specified, ' ...
+               'but multiple woi/foi entries were found.']);
+    end
+else
+    % Multiple locations: either one shared param set, or one per location.
+    if ~((n_woi == 1 && n_foi == 1) || (n_woi == n_locs && n_foi == n_locs))
+        error(['simulate_trial_data: for %d locations, woi and foi must ' ...
+               'each be either (1×…) or (%d×…).'], n_locs, n_locs);
+    end
+end
+
 % Load 
 sStudy = bst_get('Study', study_id);
 cond_path = fileparts(file_fullpath(sStudy.FileName));
@@ -24,24 +44,44 @@ numDigits = ceil(log10(sim_params.nTrials));
 fmt = sprintf('data_simulation_trial%%0%dd', numDigits);
 
 % Get WOI onset and offset in trial samples
-[~, min_time_idx] = min(abs(data_struct.Time -min(sim_params.woi)));
-[~, max_time_idx] = min(abs(data_struct.Time -max(sim_params.woi)));
+sim_struct = struct();
+for i = 1:n_locs
+    
+    if n_woi ~= 1
+        woi = sim_params.woi(i, :);
+    else
+        woi = sim_params.woi;
+    end
 
-% Simulate the signal
-dt = 1/sim_params.sfreq;
-time_diff = diff(sim_params.woi);
-t = (0:dt:time_diff);
+    [~, t_min_idx] = min(abs(data_struct.Time -min(woi)));
+    [~, t_max_idx] = min(abs(data_struct.Time -max(woi)));
 
-signal = sin(2*pi*sim_params.foi*t);
+    sim_struct(i).t_min_idx = t_min_idx;
+    sim_struct(i).t_max_idx = t_max_idx;
 
-if length(min_time_idx:max_time_idx) < length(signal)
-    warning('Length of simulated signal is longer then the time specification. Signal will be cropped ...');
-    signal = signal(1:length(min_time_idx:max_time_idx));
-elseif length(min_time_idx:max_time_idx) > length(signal)
-    warning('Length of simulated signal is shorter then the time specification. Time specification will be cropped ...');
-    max_time_idx = max_time_idx - (length(min_time_idx:max_time_idx) - length(signal));
+    % Simulate the signal
+    dt = 1/sim_params.sfreq;
+    time_diff = diff(woi);
+    t = (0:dt:time_diff);
+    
+    if numel(sim_params.foi) ~= 1
+        foi = sim_params.foi(i);
+    else
+        foi = sim_params.foi;
+    end
+
+    % Check for mismatch in length of signal
+    if length(t_min_idx:t_max_idx) < length(t)
+        warning('Length of simulated signal is longer then the time specification. Signal will be cropped ...');
+        t = t(1:length(t_min_idx:t_max_idx));
+    elseif length(t_min_idx:t_max_idx) > length(t)
+        warning('Length of simulated signal is shorter then the time specification. Time specification will be cropped ...');
+        t_max_idx = t_max_idx - (length(t_min_idx:t_max_idx) - length(t));
+    end
+
+    sim_struct(i).signal = zeros(1, ns);
+    sim_struct(i).signal(t_min_idx:t_max_idx) = sin(2*pi*foi*t);
 end
-options.sim_signal = signal;
 
 % Create nTrials of simulated data
 snr_grad = zeros(1, sim_params.nTrials);
@@ -57,20 +97,21 @@ for iTrial = 1:sim_params.nTrials
     sources = zeros(size(head_model.GridLoc, 1), length(data_struct.Time));
     
     % Assign signal to the sources
-    src_scaling = randn(length(sim_params.sim_loc), 1) * 1.1616e-9 + 1.8735e-9;
-    
-    sources(sim_params.sim_loc, min_time_idx:max_time_idx) = signal .* src_scaling;
-    
-    % Project data to xyz
-    %data_xyz = repelem(sources, 3, 1) .* reshape(permute(anatomy.VertNormals, [2,1]), [], 1);
+    for iLoc = 1:n_locs
+        src_scaling = randn(length(sim_params.sim_loc(iLoc, :)), 1) * 1.1616e-9 + 1.8735e-9;
+        sources(sim_params.sim_loc(iLoc, :), :)= sim_struct(iLoc).signal .* src_scaling;
+    end
+        
+    % Project sources to sensors
     sensor = Gain_constrained * sources;
-    %clear("data_xyz")
     
     % In Bonaiutos Simulation this is only done at the sensor level
     % Create Noise
     % Separate for each channeltype
-    signal_power_grad = mean(mean(sensor(grad_chans, min_time_idx:max_time_idx).^2, 'omitmissing'));
-    signal_power_mag = mean(mean(sensor(mag_chans, min_time_idx:max_time_idx).^2, 'omitmissing'));
+    ref_min = sim_struct(1).t_min_idx;
+    ref_max = sim_struct(1).t_max_idx;
+    signal_power_grad = mean(mean(sensor(grad_chans, ref_min:ref_max).^2, 'omitmissing'));
+    signal_power_mag = mean(mean(sensor(mag_chans, ref_min:ref_max).^2, 'omitmissing'));
     
     % Transfrom SNR in dB to a linear scale
     linear_snr = 10^(sim_params.snr_dB/10);
