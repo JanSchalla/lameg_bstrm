@@ -1,28 +1,17 @@
-function extract_multilayer_power_changes(sFiles, params)
+function extract_multilayer_power_changes(sFiles)
 
-% Set defaults
-extract_params = {};
-% Parse inputs
-if exist('params', 'var') && ~isempty(params)
-    if isfield(params, 'extract_params')
-        extract_params = params.extract_params;
-    end
-end
+tf_template = db_template('timefreq');
 
-tf_template = create_bstrm_tf_template();
 % sFiles cell of relaitves pathes to the trial data from the brainstorm db
 sData = in_bst_data(sFiles{1});
 time = sData.Time;
 clear sData
-
-if isempty(extract_params)
-    %% 1st: Let user define baseline, window of interest (woi) and frequency of interest (foi).
-    dlgTitle = 'Specify multilayer extraction parameter';
-    fieldsize = [10 50];
-    prompt = 'freq id/ freq range / BL win / WOI / extraction function';
-    example = {'theta / 4, 8 / -0.5, -0.1 / 0, 1 / hilbert'};
-    answer = inputdlg(prompt, dlgTitle, fieldsize, example);
-end
+%% 1st: Let user define baseline, window of interest (woi) and frequency of interest (foi).
+dlgTitle = 'Specify multilayer extraction parameter';
+fieldsize = [10 50];
+prompt = 'freq id/ freq range / BL win / WOI / extraction function';
+example = {'theta / 4, 8 / -0.5, -0.1 / 0, 1 / hilbert'};
+answer = inputdlg(prompt, dlgTitle, fieldsize, example);
 
 jobs = cellstr(answer{:});
 sfreq = round(1/(time(2) - time(1)));
@@ -39,6 +28,8 @@ end
 fprintf('%i Sessions identfied.\n', length(ses_ids));
 
 for ses=1:length(ses_ids)
+    fprintt('Working on Session: %i\n', ses);
+
     % init brainstorm
     bstrm_path = session_files{ses}{1};
     if length(split(bstrm_path, "/")) > length(split(bstrm_path, "\"))
@@ -53,13 +44,10 @@ for ses=1:length(ses_ids)
         bstrm_path = file_fullpath(bstrm_path);
         % Redo if previous path was relative
         tokens = split(bstrm_path, separator);
-        protocol_id = find(ismember(tokens, "brainstorm_db"), 1) + 1;
     end
-    protocol_name = tokens{protocol_id};
+
     subject_id = find(ismember(tokens, "data"), 1) + 1;
     subject_name = convertStringsToChars(tokens{subject_id});
-    study_name = convertStringsToChars(tokens{subject_id + 1});
-    data_name = convertStringsToChars(tokens{subject_id + 2});
     
     bstrm_out_path = fileparts(bstrm_path);
     % find sr file
@@ -119,10 +107,9 @@ for ses=1:length(ses_ids)
     ses_template.nAvg = 1;
     ses_template.Leff = 1;
 
-    disp('Starting extraction ...');
+    disp('Starting extraction ...')
     fprintf('Progress: %3d%%\n', 0);
     for iTrial = 1:sesTrials
-
         fprintf(1, '\b\b\b\b%3.0f%%', 100*(iTrial/sesTrials));
         % Load data for each trial
         [~, trial_id] = fileparts(session_files{ses}{iTrial});
@@ -167,14 +154,31 @@ for ses=1:length(ses_ids)
             if max(job_struct.freq_range) > sfreq/2
                 error('Selected Frequency of Interest is bigger then Nyquist Frequency (%i Hz).', round(sfreq/2));
             end
-            
-            if isempty(ses_template.Freqs{end, 1})
-                ses_template.Freqs{end, 1} = char(job_struct.id);
+                        
+            freq_id = size(ses_template.Freqs, 1);
+            hist_id = size(ses_template.History, 1);
+
+            if isempty(ses_template.Freqs{freq_id, 1})
+                % Update Frequency Bins
+                ses_template.Freqs{freq_id, 1} = char(job_struct.id);
+                ses_template.Freqs{freq_id, 2} = char(join(string(job_struct.freq_range), ','));
+                ses_template.Freqs{freq_id, 3} = char(job_struct.function);
+                
+                % Update history
+                ses_template.History{hist_id, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
+                ses_template.History{hist_id, 2} = char('compute'); 
+                ses_template.History{hist_id, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
             else 
-                ses_template.Freqs{end+1, 1} = char(job_struct.id);
+                % Update Frequency bins
+                ses_template.Freqs{freq_id+1, 1} = char(job_struct.id);
+                ses_template.Freqs{freq_id, 2} = char(join(string(job_struct.freq_range), ','));
+                ses_template.Freqs{freq_id, 3} = char(job_struct.function);
+                
+                % Update history
+                ses_template.History{hist_id+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
+                ses_template.History{hist_id+1, 2} = char('compute'); 
+                ses_template.History{hist_id+1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
             end
-            ses_template.Freqs{end, 2} = char(join(string(job_struct.freq_range), ','));
-            ses_template.Freqs{end, 3} = char(job_struct.function);
             
             % bring time information in sample space
             [~, base_min_idx] = min(abs(time - job_struct.base_win(1)));
@@ -210,12 +214,6 @@ for ses=1:length(ses_ids)
         
         out_fname = sprintf('timefreq_%s_psd_multilayer_power_change.mat', trial_id(end-7:end));
         
-        % This seems to work now and it is displayed in the database and
-        % can be viewed. However bstrm does something on the fly when
-        % calculating the data so it is strictly positive... -> not the
-        % case so either (1) save them but not visualize them, (2) save
-        % them in a format which makes visualisation possible or (3) save
-        % them outside of the database
         save(fullfile(bstrm_out_path, out_fname), '-struct', 'ses_template');
     end
 end
