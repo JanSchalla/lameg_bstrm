@@ -130,7 +130,7 @@ for i = 1:n_locs
     end
 
     % Reconcile rounding differences between time vector and sample window
-    woi_samples = t_min_idx : t_max_idx;
+    woi_samples = sim_struct(i).t_min_idx : sim_struct(i).t_max_idx;
     if length(woi_samples) < length(t)
         warning(['simulate_trial_data: simulated signal (loc %d) is longer ' ...
                  'than the sample window — signal will be cropped.'], i);
@@ -195,8 +195,8 @@ for iTrial = 1:sim_params.nTrials
     noise(mag_chans, :) = noise_std_mag * noise(mag_chans, :);
     
     % Measure achieved SNR before adding noise
-    snr_grad(iTrial) = 10*log10(signal_power_grad/(mean(mean(noise(grad_chans, min_time_idx:max_time_idx).^2))));
-    snr_mag(iTrial) = 10*log10(signal_power_mag/(mean(mean(noise(mag_chans, min_time_idx:max_time_idx).^2))));
+    snr_grad(iTrial) = 10*log10(signal_power_grad/(mean(mean(noise(grad_chans, ref_min:ref_max).^2))));
+    snr_mag(iTrial) = 10*log10(signal_power_mag/(mean(mean(noise(mag_chans, ref_min:ref_max).^2))));
 
     % Add noise; zero out non-MEG channels
     sensor = sensor + noise;
