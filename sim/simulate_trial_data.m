@@ -91,6 +91,7 @@ mag_chans = strcmp({channels.Channel.Type}, 'MEG MAG')';
 grad_chans = strcmp({channels.Channel.Type}, 'MEG GRAD')';
 
 head_model = in_bst_headmodel(headmodel_fname);
+anatomy = in_tess_bst(head_model.SurfaceFile);
 Gain_constrained = bst_gain_orient(head_model.Gain, head_model.GridOrient);
 
 datamat_template = db_template('datamat');
@@ -146,7 +147,27 @@ for i = 1:n_locs
         sin(2 * pi * foi * t);
     sim_struct(i).foi = foi;
     sim_struct(i).woi = woi;
+
+    % Insert sim locations as scouts to anatomy
+    user_scout_idx = find(ismember({anatomy.Atlas.Name}, 'User scouts'));
+    if isempty(anatomy.Atlas(user_scout_idx).Scouts)
+        scout_idx = 1;
+    else
+        if isempty(anatomy.Atlas(user_scout_idx).Scouts(1).Vertices)
+            scout_idx = 1;
+        else
+            scout_idx = size(anatomy.Atlas(user_scout_idx).Scouts, 2) + 1; 
+        end
+    end
+    anatomy.Atlas(user_scout_idx).Scouts(scout_idx) = db_template('Scout');
+    anatomy.Atlas(user_scout_idx).Scouts(scout_idx).Vertices = sim_params.sim_loc(i);
+    anatomy.Atlas(user_scout_idx).Scouts(scout_idx).Seed = min(sim_params.sim_loc(i));
+    anatomy.Atlas(user_scout_idx).Scouts(scout_idx).Color = [0.2 0.5 0.3];
+    anatomy.Atlas(user_scout_idx).Scouts(scout_idx).Label = sprintf('Simulation Vertex: %i', sim_params.sim_loc(i));
 end
+
+% Save anatomy file
+save(file_fullpath(head_model.SurfaceFile), '-struct', 'anatomy');
 
 % -------------------------------------------------------------------------
 %  Generate nTrials of simulated sensor data
