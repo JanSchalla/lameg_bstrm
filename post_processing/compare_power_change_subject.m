@@ -93,6 +93,7 @@ for i=1:n_contrasts
     % paper does it? Default var scaling in ttest_corrected is by 0.01
     % (also 10*higher then recommended by above paper
     % Nachdenken!
+    
     [t_vals(i), p_vals(i)] = ttest_corrected(avg_trial_change, 'correction', 10e-4*max(var(pial_white_diff(multilayer_mask, :, ii), [], 2)), ...
         'tail', 0);
 
