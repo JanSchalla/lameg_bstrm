@@ -1,7 +1,7 @@
 function [contrast_name, t_vals, p_vals] = compare_power_change_subject(sFiles, params)
 
 % Set defaults
-roi_cutoff = 60;
+roi_cutoff = 70;
 tail = 0;
 roi = [];
 verbose = true;
@@ -83,7 +83,9 @@ for i=1:n_contrasts
     if sum(multilayer_mask) == 1
         avg_trial_change = pial_white_diff(multilayer_mask, :, i);
     else
-        avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i), 2);
+        % Ask Esther what she thinks about averaging over trials or over
+        % soruces 
+        avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i));
     end    
     
     contrast_name{i} = sTrial.Freqs{i};
