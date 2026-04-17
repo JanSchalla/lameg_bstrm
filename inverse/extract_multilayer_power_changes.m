@@ -28,7 +28,7 @@ end
 fprintf('%i Sessions identfied.\n', length(ses_ids));
 
 for ses=1:length(ses_ids)
-    fprintt('Working on Session: %i\n', ses);
+    fprintf('Working on Session: %i\n', ses);
 
     % init brainstorm
     bstrm_path = session_files{ses}{1};
@@ -155,29 +155,27 @@ for ses=1:length(ses_ids)
                 error('Selected Frequency of Interest is bigger then Nyquist Frequency (%i Hz).', round(sfreq/2));
             end
                         
-            freq_id = size(ses_template.Freqs, 1);
-            hist_id = size(ses_template.History, 1);
-
-            if isempty(ses_template.Freqs{freq_id, 1})
+            if ~isfield(ses_template, 'Freqs')
                 % Update Frequency Bins
-                ses_template.Freqs{freq_id, 1} = char(job_struct.id);
-                ses_template.Freqs{freq_id, 2} = char(join(string(job_struct.freq_range), ','));
-                ses_template.Freqs{freq_id, 3} = char(job_struct.function);
+                ses_template.Freqs{1, 1} = char(job_struct.id);
+                ses_template.Freqs{1, 2} = char(join(string(job_struct.freq_range), ','));
+                ses_template.Freqs{1, 3} = char(sprintf('BL: %.2f-%.2f; WOI: %.2f-%.2f', job_struct.base_win, job_struct.woi));
                 
                 % Update history
-                ses_template.History{hist_id, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
-                ses_template.History{hist_id, 2} = char('compute'); 
-                ses_template.History{hist_id, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
+                ses_template.History{1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
+                ses_template.History{1, 2} = char('compute'); 
+                ses_template.History{1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
             else 
+                freq_id = size(ses_template.Freqs, 1);
                 % Update Frequency bins
                 ses_template.Freqs{freq_id+1, 1} = char(job_struct.id);
-                ses_template.Freqs{freq_id, 2} = char(join(string(job_struct.freq_range), ','));
-                ses_template.Freqs{freq_id, 3} = char(job_struct.function);
+                ses_template.Freqs{freq_id+1, 2} = char(join(string(job_struct.freq_range), ','));
+                ses_template.Freqs{freq_id+1, 3} = char(sprintf('BL: %.2f-%.2f; WOI: %.2f-%.2f', job_struct.base_win, job_struct.woi));
                 
                 % Update history
-                ses_template.History{hist_id+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
-                ses_template.History{hist_id+1, 2} = char('compute'); 
-                ses_template.History{hist_id+1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
+                ses_template.History{freq_id+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
+                ses_template.History{freq_id+1, 2} = char('compute'); 
+                ses_template.History{freq_id+1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
             end
             
             % bring time information in sample space
