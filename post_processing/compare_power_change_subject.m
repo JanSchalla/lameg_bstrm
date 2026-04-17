@@ -55,6 +55,8 @@ t_vals = zeros(n_contrasts, 1);
 p_vals = zeros(n_contrasts, 1);
 
 for i=1:n_contrasts
+    var_full_map = var(pial_white_diff(:, :, i), [], 2);
+    delta = 1e-3 * max(var_full_map);
 
     if isempty(roi)
         % Compute global roi
@@ -94,7 +96,7 @@ for i=1:n_contrasts
     % (also 10*higher then recommended by above paper
     % Nachdenken!
     
-    [t_vals(i), p_vals(i)] = ttest_corrected(avg_trial_change, 'correction', 10e-4*max(var(pial_white_diff(multilayer_mask, :, ii), [], 2)), ...
+    [t_vals(i), p_vals(i)] = ttest_corrected(avg_trial_change, 'correction', delta, ...
         'tail', 0);
 
     if verbose
