@@ -1,5 +1,9 @@
 function [contrast_name, t_vals, p_vals] = compare_power_change_subject(sFiles, params)
 
+if ~brainstorm('status')
+    brainstorm nogui
+end
+
 % Set defaults
 roi_cutoff = 70;
 tail = 0;
@@ -42,11 +46,11 @@ for i = 1:length(sFiles)
     sTrial = in_bst_data(sFiles{i});
     for ii=1:n_contrasts
         % Split into white and pial surface results
-        white_diff(:, 1, ii) = sTrial.TF(vertices_white, 1, ii);
-        pial_diff(:, 1, ii) = sTrial.TF(vertices_pial, 1, ii);
+        white_diff(:, i, ii) = sTrial.TF(vertices_white, 1, ii);
+        pial_diff(:, i, ii) = sTrial.TF(vertices_pial, 1, ii);
         % calculate difference between the two surfaces
         % Here taking the absolute is very! important
-        pial_white_diff(:, i, ii) = abs(pial_diff(:, 1, ii)) - abs(white_diff(:, 1, ii));
+        pial_white_diff(:, i, ii) = abs(pial_diff(:, i, ii)) - abs(white_diff(:, i, ii));
     end
 end
 
@@ -60,33 +64,29 @@ for i=1:n_contrasts
 
     if isempty(roi)
         % Compute global roi
-        pial_avg = mean(pial_diff(:, 1, i), 2);
-        pial_thresh = prctile(pial_avg, roi_cutoff);
-        pial_mask = pial_avg > pial_thresh;
-        % Use Leadfield
-        white_avg = mean(white_diff(:, 1, i), 2);
-        white_thresh = prctile(white_avg, roi_cutoff);
-        white_mask = white_avg > white_thresh;
+        pial_t_statistic = ttest_corrected(pial_diff(:, :, i)');
+        white_t_statistic = ttest_corrected(white_diff(:, :, i)');
+        pial_thresh = prctile(pial_t_statistic, roi_cutoff);
+        pial_mask = pial_t_statistic > pial_thresh;
+        white_thresh = prctile(white_t_statistic, roi_cutoff);
+        white_mask = white_t_statistic > white_thresh;
     else
         % Compute roi based on specified scout
         pial_mask = zeros(size(pial_diff, 1), 1);
         pial_mask(roi) = true; 
-        % Use Leadfield
         white_mask = zeros(size(pial_diff, 1), 1);
         white_mask(roi) = true;    
     end
     
     multilayer_mask = pial_mask | white_mask;
-    fprintf('%i vertices (%.2f%s of all vertices) are included in comparison.\n', sum(multilayer_mask), 100*(sum(multilayer_mask)/length(multilayer_mask)), '%');
+    
+    if verbose
+        fprintf('%i vertices (%.2f%s of all vertices) are included in comparison.\n', sum(multilayer_mask), 100*(sum(multilayer_mask)/length(multilayer_mask)), '%');
+    end
 
-    % Average over over vertices in ROI
-    if sum(multilayer_mask) == 1
-        avg_trial_change = pial_white_diff(multilayer_mask, :, i);
-    else
-        % Ask Esther what she thinks about averaging over trials or over
-        % soruces 
-        avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i));
-    end    
+    % Average over vertices in ROI
+
+    avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i));  
     
     contrast_name{i} = sTrial.Freqs{i};
 
