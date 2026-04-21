@@ -1,8 +1,19 @@
-function extract_multilayer_power_changes(sFiles)
+function extract_multilayer_power_changes(sFiles, protocol_name, params)
 
 if ~brainstorm('status')
     brainstorm nogui
 end
+
+% Parse inputs
+if exist('params', 'var') && ~isempty(params)
+    if isfield(params, 'prompt')
+        answer = params.prompt;
+    end
+end
+
+ % Open protocol
+protocol = bst_get('Protocol', protocol_name);
+gui_brainstorm('SetCurrentProtocol', protocol);
 
 tf_template = db_template('timefreq');
 
@@ -11,13 +22,19 @@ sData = in_bst_data(sFiles{1});
 time = sData.Time;
 clear sData
 %% 1st: Let user define baseline, window of interest (woi) and frequency of interest (foi).
-dlgTitle = 'Specify multilayer extraction parameter';
-fieldsize = [10 50];
-prompt = 'freq id/ freq range / BL win / WOI / extraction function';
-example = {'theta / 4, 8 / -0.5, -0.1 / 0, 1 / hilbert'};
-answer = inputdlg(prompt, dlgTitle, fieldsize, example);
+if ~exist("answer", "var")
+    dlgTitle = 'Specify multilayer extraction parameter';
+    fieldsize = [10 50];
+    prompt = 'freq id/ freq range / BL win / WOI';
+    example = {'theta / 4, 8 / -0.5, -0.1 / 0, 1'};
+    answer = inputdlg(prompt, dlgTitle, fieldsize, example);
 
-jobs = cellstr(answer{:});
+    jobs = cellstr(answer{:});
+else
+    jobs = cellstr(answer);
+end
+
+
 sfreq = round(1/(time(2) - time(1)));
 %% Check if all files are of the same run
 nTrialsTotal = length(sFiles);
@@ -120,8 +137,9 @@ for ses=1:length(ses_ids)
         sRawData = in_bst_data(session_files{ses}{iTrial});
     
         sensorData = sRawData.F(sKernel.GoodChannel, :);
+        
         %reconstruct source data from kernel
-        source_data = sKernel.ImagingKernel * sensorData;
+        %source_data = sKernel.ImagingKernel * sensorData;
 
         for job=1:length(jobs)
         
@@ -133,8 +151,7 @@ for ses=1:length(ses_ids)
                 'id', job_specs{1}, ...
                 'freq_range', str2double(split(job_specs{2}, ',')), ...
                 'base_win', str2double(split(job_specs{3}, ',')), ...
-                'woi', str2double(split(job_specs{4}, ',')), ...
-                'function', job_specs{5});
+                'woi', str2double(split(job_specs{4}, ',')));
         
             if min(job_struct.base_win) < min(time)
                 error('Baseline starts outside of trial. Baseline cannot be defined smaller then %.3f seconds (Job ID: %s)', min(time), job_struct.id);
@@ -168,7 +185,7 @@ for ses=1:length(ses_ids)
                 % Update history
                 ses_template.History{1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
                 ses_template.History{1, 2} = char('compute'); 
-                ses_template.History{1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
+                ses_template.History{1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
             else 
                 freq_id = size(ses_template.Freqs, 1);
                 % Update Frequency bins
@@ -179,8 +196,11 @@ for ses=1:length(ses_ids)
                 % Update history
                 ses_template.History{freq_id+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
                 ses_template.History{freq_id+1, 2} = char('compute'); 
-                ses_template.History{freq_id+1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
+                ses_template.History{freq_id+1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
             end
+            
+            % Bandpasss filter sensor data
+            sensorData = bandpass(sensorData', job_struct.freq_range, sfreq)';
             
             % bring time information in sample space
             [~, base_min_idx] = min(abs(time - job_struct.base_win(1)));
@@ -194,21 +214,23 @@ for ses=1:length(ses_ids)
             clear('woi_min_idx', "woi_max_idx");
 
             % extract job specific data
-            source_data_bp = bandpass(source_data', job_struct.freq_range, sfreq);
-
-            source_data_power = abs(hilbert(source_data_bp)).^2;
-
-            base_power = mean(source_data_power(base_win_samples(1):base_win_samples(2), :)', 2);
-            woi_power = mean(source_data_power(woi_samples(1):woi_samples(2), :)', 2);
-    
-            power_change = woi_power - base_power;
+            source_data_base = sKernel.ImagingKernel * sensorData(:, base_win_samples(1):base_win_samples(2));
+            source_data_woi = sKernel.ImagingKernel * sensorData(:, woi_samples(1):woi_samples(2));
+           
+            % In the original lameg code (from Jimmy) the absolute hilbert
+            % is not squared. Here we square to have an assessment of
+            % instantaneous power.
+            source_power_base = mean(abs(hilbert(source_data_base)).^2, 2);
+            source_power_woi = mean(abs(hilbert(source_data_woi)).^2, 2);
+            
+            power_change = source_power_woi - source_power_base;
             
             ses_template.TF(:, 1, job) = power_change;
 
             ses_template.Comment = char(join([ses_template.Comment trial_id "multilayer power change"], " | "));
             ses_template.History{end+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
             ses_template.History{end, 2} = char('compute'); 
-            ses_template.History{end, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i; Function: %s', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range, job_struct.function));
+            ses_template.History{end, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
         end 
         
         % Link it to the trial sensor data and to the multilayer kernel!
