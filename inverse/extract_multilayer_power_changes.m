@@ -132,14 +132,15 @@ for ses=1:length(ses_ids)
     fprintf('Progress: %3d%%\n', 0);
     for iTrial = 1:sesTrials
         fprintf(1, '\b\b\b\b%3.0f%%', 100*(iTrial/sesTrials));
+
+        trial_template = ses_template;
+
         % Load data for each trial
         [~, trial_id] = fileparts(session_files{ses}{iTrial});
         sRawData = in_bst_data(session_files{ses}{iTrial});
     
+        % Reduce sensor data to only used channels in source reconstruction
         sensorData = sRawData.F(sKernel.GoodChannel, :);
-        
-        %reconstruct source data from kernel
-        %source_data = sKernel.ImagingKernel * sensorData;
 
         for job=1:length(jobs)
         
@@ -176,27 +177,27 @@ for ses=1:length(ses_ids)
                 error('Selected Frequency of Interest is bigger then Nyquist Frequency (%i Hz).', round(sfreq/2));
             end
                         
-            if ~isfield(ses_template, 'Freqs')
+            if ~isfield(trial_template, 'Freqs')
                 % Update Frequency Bins
-                ses_template.Freqs{1, 1} = char(job_struct.id);
-                ses_template.Freqs{1, 2} = char(join(string(job_struct.freq_range), ','));
-                ses_template.Freqs{1, 3} = char(sprintf('BL: %.2f-%.2f; WOI: %.2f-%.2f', job_struct.base_win, job_struct.woi));
+                trial_template.Freqs{1, 1} = char(job_struct.id);
+                trial_template.Freqs{1, 2} = char(join(string(job_struct.freq_range), ','));
+                trial_template.Freqs{1, 3} = char(sprintf('BL: %.2f-%.2f; WOI: %.2f-%.2f', job_struct.base_win, job_struct.woi));
                 
                 % Update history
-                ses_template.History{1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
-                ses_template.History{1, 2} = char('compute'); 
-                ses_template.History{1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
+                trial_template.History{1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
+                trial_template.History{1, 2} = char('compute'); 
+                trial_template.History{1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
             else 
-                freq_id = size(ses_template.Freqs, 1);
+                freq_id = size(trial_template.Freqs, 1);
                 % Update Frequency bins
-                ses_template.Freqs{freq_id+1, 1} = char(job_struct.id);
-                ses_template.Freqs{freq_id+1, 2} = char(join(string(job_struct.freq_range), ','));
-                ses_template.Freqs{freq_id+1, 3} = char(sprintf('BL: %.2f-%.2f; WOI: %.2f-%.2f', job_struct.base_win, job_struct.woi));
+                trial_template.Freqs{freq_id+1, 1} = char(job_struct.id);
+                trial_template.Freqs{freq_id+1, 2} = char(join(string(job_struct.freq_range), ','));
+                trial_template.Freqs{freq_id+1, 3} = char(sprintf('BL: %.2f-%.2f; WOI: %.2f-%.2f', job_struct.base_win, job_struct.woi));
                 
                 % Update history
-                ses_template.History{freq_id+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
-                ses_template.History{freq_id+1, 2} = char('compute'); 
-                ses_template.History{freq_id+1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
+                trial_template.History{freq_id+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
+                trial_template.History{freq_id+1, 2} = char('compute'); 
+                trial_template.History{freq_id+1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
             end
             
             % Bandpasss filter sensor data
@@ -225,19 +226,21 @@ for ses=1:length(ses_ids)
             
             power_change = source_power_woi - source_power_base;
             
-            ses_template.TF(:, 1, job) = power_change;
+            trial_template.TF(:, 1, job) = power_change;
 
-            ses_template.Comment = char(join([ses_template.Comment trial_id "multilayer power change"], " | "));
-            ses_template.History{end+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
-            ses_template.History{end, 2} = char('compute'); 
-            ses_template.History{end, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
+            trial_template.Comment = char(join([trial_template.Comment trial_id "multilayer power change"], " | "));
+            trial_template.History{end+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
+            trial_template.History{end, 2} = char('compute'); 
+            trial_template.History{end, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
         end 
         
         % Link it to the trial sensor data and to the multilayer kernel!
-        ses_template.DataFile = char(sprintf('link|%s|%s', file_short(char(kernel_file)), session_files{ses}{iTrial}));
+        trial_template.DataFile = char(sprintf('link|%s|%s', file_short(char(kernel_file)), session_files{ses}{iTrial}));
         
         out_fname = sprintf('timefreq_%s_psd_multilayer_power_change.mat', trial_id(end-7:end));
         
-        save(fullfile(bstrm_out_path, out_fname), '-struct', 'ses_template');
+        save(fullfile(bstrm_out_path, out_fname), '-struct', 'trial_template');
     end
 end
+
+fpintf('\nExtraction finished!\n');

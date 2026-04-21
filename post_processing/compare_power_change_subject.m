@@ -59,6 +59,9 @@ t_vals = zeros(n_contrasts, 1);
 p_vals = zeros(n_contrasts, 1);
 
 for i=1:n_contrasts
+
+    % Calcualte correction metric (https://doi.org/10.1016/j.neuroimage.2011.10.027)
+    % Correction is applied below
     var_full_map = var(pial_white_diff(:, :, i), [], 2);
     delta = 1e-3 * max(var_full_map);
 
@@ -89,14 +92,6 @@ for i=1:n_contrasts
     avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i));  
     
     contrast_name{i} = sTrial.Freqs{i};
-
-    % compare vertex activity against 0 -> adapted std of population
-    % (https://doi.org/10.1016/j.neuroimage.2011.10.027)
-    % Here in bonaiutos code the correction param was choosen to be
-    % 25*var(avg_trial_change) -> does not go with the explanation in above
-    % paper does it? Default var scaling in ttest_corrected is by 0.01
-    % (also 10*higher then recommended by above paper
-    % Nachdenken!
     
     [t_vals(i), p_vals(i)] = ttest_corrected(avg_trial_change, 'correction', delta, ...
         'tail', 0);
