@@ -1,5 +1,9 @@
 function extract_multilayer_power_changes(sFiles)
 
+if ~brainstorm('status')
+    brainstorm nogui
+end
+
 tf_template = db_template('timefreq');
 
 % sFiles cell of relaitves pathes to the trial data from the brainstorm db
