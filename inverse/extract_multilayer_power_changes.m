@@ -6,8 +6,8 @@ end
 
 % Parse inputs
 if exist('params', 'var') && ~isempty(params)
-    if isfield(params, 'prompt')
-        answer = params.prompt;
+    if isfield(params, 'extract_params')
+        extract_params = params.extract_params;
     end
 end
 
@@ -22,7 +22,7 @@ sData = in_bst_data(sFiles{1});
 time = sData.Time;
 clear sData
 %% 1st: Let user define baseline, window of interest (woi) and frequency of interest (foi).
-if ~exist("answer", "var")
+if ~exist("extract_params", "var")
     dlgTitle = 'Specify multilayer extraction parameter';
     fieldsize = [10 50];
     prompt = 'freq id/ freq range / BL win / WOI';
@@ -31,7 +31,7 @@ if ~exist("answer", "var")
 
     jobs = cellstr(answer{:});
 else
-    jobs = cellstr(answer);
+    jobs = cellstr(extract_params);
 end
 
 n_jobs = numel(jobs);
@@ -74,7 +74,7 @@ for ses = 1:length(ses_ids)
 end
 
 fprintf('%i Sessions identfied.\n', length(ses_ids));
-tic
+%tic
 for ses=1:length(ses_ids)
     fprintf('Working on Session: %i\n', ses);
 
@@ -280,4 +280,4 @@ for ses=1:length(ses_ids)
 
     fprintf('\nExtraction finished for Session %i!\n', ses);
 end % ses
-toc
+%toc

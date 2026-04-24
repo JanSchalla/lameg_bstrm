@@ -49,7 +49,7 @@ for i = 1:length(sFiles)
         white_diff(:, i, ii) = sTrial.TF(vertices_white, 1, ii);
         pial_diff(:, i, ii) = sTrial.TF(vertices_pial, 1, ii);
         % calculate difference between the two surfaces
-        % Here taking the absolute is very! important
+        % Here taking the absolute is very important!
         pial_white_diff(:, i, ii) = abs(pial_diff(:, i, ii)) - abs(white_diff(:, i, ii));
     end
 end
@@ -89,7 +89,7 @@ for i=1:n_contrasts
 
     % Average over vertices in ROI
 
-    avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i));  
+    avg_trial_change = mean(pial_white_diff(multilayer_mask, :, i), 1);  
     
     contrast_name{i} = sTrial.Freqs{i};
     
