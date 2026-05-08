@@ -16,6 +16,7 @@ protocol = bst_get('Protocol', protocol_name);
 gui_brainstorm('SetCurrentProtocol', protocol);
 
 tf_template = db_template('timefreq');
+tf_template.DataType = 'results';
 
 % sFiles cell of relaitves pathes to the trial data from the brainstorm db
 sData = in_bst_data(sFiles{1});
