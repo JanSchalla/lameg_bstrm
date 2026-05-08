@@ -125,6 +125,22 @@ end
 % Load in downsampled surface
 TessMat_wm_ds = in_tess_bst(ds_firstSurf);
 
+% % Update naming & comment of the first surface
+% tok = regexp(ds_firstSurf, '(\d+)V\.mat', 'tokens');
+% nVerts_path = str2num(tok{1}{1});
+
+TessMat_wm_ds.Comment = sprintf('%s_corresponding', TessMat_wm_ds.Comment);
+% nVerts_new = size(TessMat_wm_ds.Vertices, 1);
+
+% ds_firstSurf_new = strrep(ds_firstSurf, sprintf('%dV.mat', nVerts_path), sprintf('%dV.mat', nVerts_new));
+
+bst_save(ds_firstSurf, TessMat_wm_ds, 'v7');
+% Delete old file
+% delete(ds_firstSurf);
+% 
+% % Overwrite path
+% ds_firstSurf = ds_firstSurf_new;
+
 layer_fnames = cell(n_layers, 1);
 
 layer_fnames{1} = ds_firstSurf;
@@ -239,24 +255,45 @@ movefile(multilayer_fname, New_multilayer_fname);
 %% Clean up brainstorm db from intermediate files
 % Move created file so brainstorm does not get confused
 if keep_proc_files
-    tmp_folder = fullfile(anat_path, 'tmp_multilayer');
-    fprintf('Moving downsampled files to %s ...\n', tmp_folder);
-    if not(isfolder(tmp_folder))
-        mkdir(tmp_folder);
-    end
-    
+
+    disp('Renaming downsampled files.');
+
     for iFile = 1:length(layer_fnames)
-        [~, f_name, ~] = fileparts(layer_fnames{iFile}); 
-    
+        [anat_path, f_name, ~] = fileparts(layer_fnames{iFile}); 
+
         if iFile == 1
             tokens = split(f_name, '_');
             surf_ident_idx = find(ismember(tokens, 'cortex')) + 1;
-            tmp_ds_surf = fullfile(tmp_folder, sprintf('tess_cortex_%s_%iV_ds_correspondingVerts.mat', tokens{surf_ident_idx}, length(I)));
+            tmp_ds_surf = fullfile(anat_path, sprintf('tess_cortex_%s_%iV_ds_correspondingVerts.mat', tokens{surf_ident_idx}, length(I)));
         else
-            tmp_ds_surf = fullfile(tmp_folder, sprintf('%s.mat', f_name));
+            tmp_ds_surf = fullfile(anat_path, sprintf('%s.mat', f_name));
         end
-        movefile(layer_fnames{iFile}, tmp_ds_surf)
+
+        if strcmp(layer_fnames{iFile}, tmp_ds_surf)
+            continue
+        else
+            movefile(layer_fnames{iFile}, tmp_ds_surf)
+        end
     end
+    % Do nothing!
+    % tmp_folder = fullfile(anat_path, 'tmp_multilayer');
+    % fprintf('Moving downsampled files to %s ...\n', tmp_folder);
+    % if not(isfolder(tmp_folder))
+    %     mkdir(tmp_folder);
+    % end
+    % 
+    % for iFile = 1:length(layer_fnames)
+    %     [~, f_name, ~] = fileparts(layer_fnames{iFile}); 
+    % 
+    %     if iFile == 1
+    %         tokens = split(f_name, '_');
+    %         surf_ident_idx = find(ismember(tokens, 'cortex')) + 1;
+    %         tmp_ds_surf = fullfile(tmp_folder, sprintf('tess_cortex_%s_%iV_ds_correspondingVerts.mat', tokens{surf_ident_idx}, length(I)));
+    %     else
+    %         tmp_ds_surf = fullfile(tmp_folder, sprintf('%s.mat', f_name));
+    %     end
+    %     movefile(layer_fnames{iFile}, tmp_ds_surf)
+    % end
 else
     fprintf('Deleting downsampled files ...\n');
     for iFile = 1:length(layer_fnames)
