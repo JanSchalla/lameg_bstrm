@@ -84,6 +84,9 @@ for i=1:n_contrasts
         pial_mask(roi) = true; 
         white_mask = zeros(size(pial_diff, 1), 1);
         white_mask(roi) = true;    
+
+        pial_t_statistic = ttest_corrected(pial_diff(logical(pial_mask), :, i)');
+        white_t_statistic = ttest_corrected(white_diff(logical(white_mask), :, i)');
     end
 
     if create_vis
@@ -151,8 +154,6 @@ for i=1:n_contrasts
 
     end
 
-
-    
     multilayer_mask = pial_mask | white_mask;
     
     if verbose

@@ -290,7 +290,7 @@ er_template.Time         = (0:size(empty_room, 2)-1) / sim_params.sfreq;
 
 fname_full = fullfile(cond_path, 'data_empty_room.mat');
 save(fname_full, '-struct', "er_template");
-db_add_data(study_id, fname_full);
+%db_add_data(study_id, fname_full);
 
 % Reload the study so the new trials appear in the Brainstorm GUI
 db_reload_studies(study_id, 1);
