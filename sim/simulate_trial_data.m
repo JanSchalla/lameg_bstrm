@@ -66,6 +66,8 @@ n_woi = size(sim_params.woi, 1);
 n_foi = size(sim_params.foi, 1);
 ns = size(data_struct.Time, 2);
 
+empty_room = zeros(size(data_struct.F, 1), ns*floor(sim_params.nTrials/10));
+
 if n_locs == 1
     % Single location: both woi and foi must also be scalars / single rows.
     if ~(n_woi == 1 && n_foi == 1)
@@ -95,7 +97,7 @@ anatomy = in_tess_bst(head_model.SurfaceFile);
 Gain_constrained = bst_gain_orient(head_model.Gain, head_model.GridOrient);
 
 datamat_template = db_template('datamat');
-
+er_template = db_template('datamat');
 % -------------------------------------------------------------------------
 %  Build zero-padded filename format, e.g. "data_simulation_trial001"
 % -------------------------------------------------------------------------
@@ -177,6 +179,7 @@ snr_mag = zeros(1, sim_params.nTrials);
 
 disp('Starting simulation ...')
 fprintf('Progress: %3d%%\n', 0);
+start_idx = 1;
 
 for iTrial = 1:sim_params.nTrials
 
@@ -214,6 +217,12 @@ for iTrial = 1:sim_params.nTrials
     noise = randn(size(sensor, 1), size(sensor, 2));
     noise(grad_chans, :) = noise_std_grad * noise(grad_chans, :);
     noise(mag_chans, :) = noise_std_mag * noise(mag_chans, :);
+
+
+    if mod(iTrial, 10) == 0
+        empty_room(:, start_idx:start_idx + ns -1) = noise;
+        start_idx = start_idx + ns;
+    end
     
     % Measure achieved SNR before adding noise
     snr_grad(iTrial) = 10*log10(signal_power_grad/(mean(mean(noise(grad_chans, ref_min:ref_max).^2))));
@@ -260,6 +269,28 @@ for iTrial = 1:sim_params.nTrials
     save(fname_full, '-struct', "datamat_template");
     db_add_data(study_id, sFiles{iTrial}, datamat_template);
 end % iTrial
+
+% save empty room
+er_template.F = empty_room;
+er_template.ChannelFlag  = ones(1, size(sensor, 1));
+er_template.ColormapType = data_struct.ColormapType;
+er_template.Comment      = 'Simulated Empty Room';
+er_template.DataType     = data_struct.DataType;
+er_template.Device       = data_struct.Device;
+er_template.DisplayUnits = data_struct.DisplayUnits;
+er_template.Events       = db_template('event');
+er_template.History      = {'simulate', ...
+                                 char(datetime('now', 'Format', ...
+                                     'yyyy-MM-dd''T''HH:mm:ss')), ...
+                                 datamat_template.Comment};
+er_template.Leff         = data_struct.Leff;
+er_template.nAvg         = data_struct.nAvg;
+er_template.Std          = data_struct.Std;
+er_template.Time         = (0:size(empty_room, 2)-1) / sim_params.sfreq;
+
+fname_full = fullfile(cond_path, 'data_empty_room.mat');
+save(fname_full, '-struct', "er_template");
+db_add_data(study_id, fname_full);
 
 % Reload the study so the new trials appear in the Brainstorm GUI
 db_reload_studies(study_id, 1);
