@@ -361,6 +361,8 @@ New_multilayer_fname_short = file_short(New_multilayer_fname);
 % Register this file in Brainstorm database
 [~] = db_add_surface(iSubject, New_multilayer_fname_short, out_name, 'Cortex');
 
+db_reload_subjects(iSubject);
+
 bst_progress('stop');
 
 disp('Done!');
