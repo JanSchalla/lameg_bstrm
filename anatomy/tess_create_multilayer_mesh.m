@@ -46,6 +46,7 @@ function New_multilayer_fname = tess_create_multilayer_mesh(n_layers, wm_high_re
 keep_proc_files = true;
 newNbVertices = 15002;
 inflation_function = 'linear';
+mode_auto = false;
 
 % parse defaults
 if exist('params', 'var') && ~isempty(params)
@@ -59,6 +60,10 @@ if exist('params', 'var') && ~isempty(params)
 
         if isfield(params, 'inflation_function')
             inflation_function = params.inflation_function;
+        end
+
+        if isfield(params, 'mode_auto')
+            mode_auto = params.mode_auto;
         end
 end
 
@@ -103,23 +108,25 @@ vertices_per_surface = numel(I);
 
 ds_firstSurf = file_fullpath(ds_firstSurf);
 
-% Ask the user if scouts should be created
-resp = questdlg('Do you want to create individual scouts now?', ...
-                'Create Scouts', ...
-                'Yes','No','No');
-
-if strcmp(resp,'Yes')
-    % Open the surface in Brainstorm viewer
-    hFig = view_surface(ds_firstSurf);
-    bst_figures('SetCurrentFigure', hFig);     % optional, make it active
-    
-    % Optional message to guide the user
-    disp('Surface opened. Use Brainstorm GUI: Scouts > Create scout.');
-        
+if ~mode_auto
     % Ask the user if scouts should be created
-    disp('Surface opened. Create/edit scouts in Brainstorm, then press any key here to continue...');
-    pause;    % waits for key press in command window
-    disp('Continuing script after scout editing (Make sure to close the brainstorm figure to copy scouts to other layers!.');
+    resp = questdlg('Do you want to create individual scouts now?', ...
+                    'Create Scouts', ...
+                    'Yes','No','No');
+    
+    if strcmp(resp,'Yes')
+        % Open the surface in Brainstorm viewer
+        hFig = view_surface(ds_firstSurf);
+        bst_figures('SetCurrentFigure', hFig);     % optional, make it active
+        
+        % Optional message to guide the user
+        disp('Surface opened. Use Brainstorm GUI: Scouts > Create scout.');
+            
+        % Ask the user if scouts should be created
+        disp('Surface opened. Create/edit scouts in Brainstorm, then press any key here to continue...');
+        pause;    % waits for key press in command window
+        disp('Continuing script after scout editing (Make sure to close the brainstorm figure to copy scouts to other layers!.');
+    end
 end
 
 % Load in downsampled surface
@@ -275,25 +282,6 @@ if keep_proc_files
             movefile(layer_fnames{iFile}, tmp_ds_surf)
         end
     end
-    % Do nothing!
-    % tmp_folder = fullfile(anat_path, 'tmp_multilayer');
-    % fprintf('Moving downsampled files to %s ...\n', tmp_folder);
-    % if not(isfolder(tmp_folder))
-    %     mkdir(tmp_folder);
-    % end
-    % 
-    % for iFile = 1:length(layer_fnames)
-    %     [~, f_name, ~] = fileparts(layer_fnames{iFile}); 
-    % 
-    %     if iFile == 1
-    %         tokens = split(f_name, '_');
-    %         surf_ident_idx = find(ismember(tokens, 'cortex')) + 1;
-    %         tmp_ds_surf = fullfile(tmp_folder, sprintf('tess_cortex_%s_%iV_ds_correspondingVerts.mat', tokens{surf_ident_idx}, length(I)));
-    %     else
-    %         tmp_ds_surf = fullfile(tmp_folder, sprintf('%s.mat', f_name));
-    %     end
-    %     movefile(layer_fnames{iFile}, tmp_ds_surf)
-    % end
 else
     fprintf('Deleting downsampled files ...\n');
     for iFile = 1:length(layer_fnames)
@@ -362,10 +350,10 @@ TessMat.Atlas = new_atlas_struct;
 
 bst_save(New_multilayer_fname, TessMat, 'v7');
 
+%% Finish Up
 disp('###################');
 disp('Finishing Up ...');
 
-%% Finish Up
 % Make output filename relative
 New_multilayer_fname_short = file_short(New_multilayer_fname);
 % Get subject
