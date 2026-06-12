@@ -1,4 +1,4 @@
-function extract_multilayer_power_changes(sFiles, protocol_name, params)
+function extract_multilayer_power(sFiles, protocol_name, params)
 
 if ~brainstorm('status')
     brainstorm nogui
@@ -26,8 +26,8 @@ clear sData
 if ~exist("extract_params", "var")
     dlgTitle = 'Specify multilayer extraction parameter';
     fieldsize = [10 50];
-    prompt = 'freq id/ freq range / BL win / WOI';
-    example = {'theta / 4, 8 / -0.5, -0.1 / 0, 1'};
+    prompt = 'freq id/ freq range / WOI';
+    example = {'theta / 4, 8 / 0, 1'};
     answer = inputdlg(prompt, dlgTitle, fieldsize, example);
 
     jobs = cellstr(answer{:});
@@ -189,23 +189,8 @@ for ses=1:length(ses_ids)
                 job_struct = struct( ...
                     'id', job_specs{1}, ...
                     'freq_range', str2double(split(job_specs{2}, ',')), ...
-                    'base_win', str2double(split(job_specs{3}, ',')), ...
-                    'woi', str2double(split(job_specs{4}, ',')));
+                    'woi', str2double(split(job_specs{3}, ',')));
             
-                if min(job_struct.base_win) < min(time)
-                    error('Baseline starts outside of trial. Baseline cannot be defined smaller then %.3f seconds (Job ID: %s)', min(time), job_struct.id);
-                end
-            
-                if max(job_struct.base_win) > min(job_struct.woi)
-                    warning('Baseline and Window if Interest overlap. This is not recommended (Job ID: %s).', job_struct.id);
-                    dlgTitle    = 'Overlap of Baseline and WOI';
-                    dlgQuestion = 'Do you wish to continue?';
-                    choice = questdlg(dlgQuestion,dlgTitle,'Yes','No', 'No');
-                
-                    if strcmp(choice, 'No')
-                        error('Baseline and WOI overlap.');
-                    end
-                end
             
                 if max(job_struct.woi) > max(time)
                     error('Window of Interest ends outside of trial bound. WOI cannot be defined bigger then %.3f seconds (Job ID: %s)', max(time), job_struct.id);
@@ -219,61 +204,52 @@ for ses=1:length(ses_ids)
                     % Update Frequency Bins
                     trial_template.Freqs{1, 1} = char(job_struct.id);
                     trial_template.Freqs{1, 2} = char(join(string(job_struct.freq_range), ','));
-                    trial_template.Freqs{1, 3} = char(sprintf('BL: %.2f-%.2f; WOI: %.2f-%.2f', job_struct.base_win, job_struct.woi));
+                    trial_template.Freqs{1, 3} = char(sprintf('WOI: %.2f-%.2f', job_struct.woi));
                     
                     % Update history
                     trial_template.History{1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
                     trial_template.History{1, 2} = char('compute'); 
-                    trial_template.History{1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
+                    trial_template.History{1, 3} = char(sprintf('extract_multilayer_power | %s; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.woi, job_struct.freq_range));
                 else 
                     freq_id = size(trial_template.Freqs, 1);
                     % Update Frequency bins
                     trial_template.Freqs{freq_id+1, 1} = char(job_struct.id);
                     trial_template.Freqs{freq_id+1, 2} = char(join(string(job_struct.freq_range), ','));
-                    trial_template.Freqs{freq_id+1, 3} = char(sprintf('BL: %.2f-%.2f; WOI: %.2f-%.2f', job_struct.base_win, job_struct.woi));
+                    trial_template.Freqs{freq_id+1, 3} = char(sprintf('WOI: %.2f-%.2f', job_struct.woi));
                     
                     % Update history
                     trial_template.History{freq_id+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
                     trial_template.History{freq_id+1, 2} = char('compute'); 
-                    trial_template.History{freq_id+1, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
+                    trial_template.History{freq_id+1, 3} = char(sprintf('extract_multilayer_power | %s; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.woi, job_struct.freq_range));
                 end
                 
                 % bring time information in sample space
-                [~, base_min_idx] = min(abs(time - job_struct.base_win(1)));
-                [~, base_max_idx] = min(abs(time - job_struct.base_win(2)));
-                base_win_samples = [base_min_idx base_max_idx];
-                clear('base_min_idx', "base_max_idx");
-                
                 [~, woi_min_idx] = min(abs(time - job_struct.woi(1)));
                 [~, woi_max_idx] = min(abs(time - job_struct.woi(2)));
                 woi_samples = [woi_min_idx woi_max_idx];
                 clear('woi_min_idx', "woi_max_idx");
     
                 % extract job specific data
-                source_data_base = sKernel.ImagingKernel * sensorData_bp(:, base_win_samples(1):base_win_samples(2));
                 source_data_woi = sKernel.ImagingKernel * sensorData_bp(:, woi_samples(1):woi_samples(2));
                
                 % In the original lameg code (from Jimmy) the absolute hilbert
                 % is not squared. Here we square to have an assessment of
                 % instantaneous power.
-                source_power_base = mean(abs(hilbert(source_data_base)).^2, 2);
                 source_power_woi = mean(abs(hilbert(source_data_woi)).^2, 2);
-                
-                power_change = source_power_woi - source_power_base;
-                
-                trial_template.TF(:, 1, job_idx) = power_change;
+                                
+                trial_template.TF(:, 1, job_idx) = source_power_woi;
     
-                trial_template.Comment = char(join([trial_template.Comment trial_id "multilayer power change"], " | "));
+                trial_template.Comment = char(join([trial_template.Comment trial_id "multilayer power"], " | "));
                 trial_template.History{end+1, 1} = char(datestr(now, 'dd/mm/yy-HH:MM'));
                 trial_template.History{end, 2} = char('compute'); 
-                trial_template.History{end, 3} = char(sprintf('extract_multilayer_power_changes | %s; BL: %f %f; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.base_win, job_struct.woi, job_struct.freq_range));
+                trial_template.History{end, 3} = char(sprintf('extract_multilayer_power | %s; WOI: %f %f; Freq: %i %i', job_struct.id, job_struct.woi, job_struct.freq_range));
             end % sub_job
         end % job
         
         % Link it to the trial sensor data and to the multilayer kernel!
         trial_template.DataFile = char(sprintf('link|%s|%s', file_short(char(kernel_file)), session_files{ses}{iTrial}));
         
-        out_fname = sprintf('timefreq_%s_psd_multilayer_power_change.mat', trial_id(end-7:end));
+        out_fname = sprintf('timefreq_%s_psd_multilayer_power.mat', trial_id(end-7:end));
         
         save(fullfile(bstrm_out_path, out_fname), '-struct', 'trial_template');
     end % iTrial

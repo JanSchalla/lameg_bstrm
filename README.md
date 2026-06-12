@@ -20,8 +20,8 @@ headmodel_fname =*Path to headmodel*;
 study_id = *ID to let brainstorm know where to save the data*; 
 
 sim_params = struct( ...
-                    'woi', [0.1 0.5],... %When the activity is active
-                    'foi', 20, ... % Simulated activity frequency (in Hz)
+                    'woi', [0.1 0.5],... %When the source is active
+                    'foi', 20, ... % Simulated frequency (in Hz)
                     'sfreq', 250, ... % Sampling rate
                     'nTrials', 540, ... % Nr. of trials to simulate
                     'sim_loc', 7521, ... % Where to simulate on the cortical mesh

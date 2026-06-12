@@ -1,4 +1,4 @@
-function extract_multilayer_power_changes(sFiles, protocol_name, params)
+function extract_multilayer_power_changes_noBP(sFiles, protocol_name, params)
 
 if ~brainstorm('status')
     brainstorm nogui
@@ -175,7 +175,7 @@ for ses=1:length(ses_ids)
         for job = 1:size(independend_jobs, 1)
 
             % Bandpasss filter sensor data
-            sensorData_bp = bandpass(sensorData', [independend_jobs(job, :)], sfreq)';
+            %sensorData_bp = bandpass(sensorData', [independend_jobs(job, :)], sfreq)';
 
             for sub_job=1:n_sub_jobs(job)
 
@@ -250,8 +250,8 @@ for ses=1:length(ses_ids)
                 clear('woi_min_idx', "woi_max_idx");
     
                 % extract job specific data
-                source_data_base = sKernel.ImagingKernel * sensorData_bp(:, base_win_samples(1):base_win_samples(2));
-                source_data_woi = sKernel.ImagingKernel * sensorData_bp(:, woi_samples(1):woi_samples(2));
+                source_data_base = sKernel.ImagingKernel * sensorData(:, base_win_samples(1):base_win_samples(2));
+                source_data_woi = sKernel.ImagingKernel * sensorData(:, woi_samples(1):woi_samples(2));
                
                 % In the original lameg code (from Jimmy) the absolute hilbert
                 % is not squared. Here we square to have an assessment of
