@@ -190,8 +190,9 @@ for iTrial = 1:sim_params.nTrials
     
      % Assign (randomly scaled) signal to each active source
     for iLoc = 1 : n_locs
-        src_scaling = randn(length(sim_params.sim_loc(iLoc, :)), 1) ...
-                      * 1.1616e-9 + 1.8735e-9; % Parameter eyeballed to achieve realisitic sensor level scaling after projecting
+        src_scaling = 1.1616e-9 + 1.8735e-9; 
+        %src_scaling = randn(length(sim_params.sim_loc(iLoc, :)), 1) ...
+        %              * 1.1616e-9 + 1.8735e-9; % Parameter eyeballed to achieve realisitic sensor level scaling after projecting
         sources(sim_params.sim_loc(iLoc, :), :) = ...
             src_scaling * sim_struct(iLoc).signal; 
     end
@@ -205,18 +206,19 @@ for iTrial = 1:sim_params.nTrials
     % -----------------------------------------------------------------
     ref_min = sim_struct(1).t_min_idx;
     ref_max = sim_struct(1).t_max_idx;
-    signal_power_grad = mean(mean(sensor(grad_chans, ref_min:ref_max).^2, 'omitmissing'));
-    signal_power_mag = mean(mean(sensor(mag_chans, ref_min:ref_max).^2, 'omitmissing'));
+    signal_power_grad = mean(mean(abs(sensor(grad_chans, ref_min:ref_max)), 'omitmissing'));
+    signal_power_mag = mean(mean(abs(sensor(mag_chans, ref_min:ref_max)), 'omitmissing'));
     
     % Convert target SNR from dB to linear scale and derive noise std
     linear_snr = 10^(sim_params.snr_dB/10);
-    noise_std_grad = sqrt(signal_power_grad/linear_snr);
-    noise_std_mag = sqrt(signal_power_mag/linear_snr);
+    noise_std_grad = signal_power_grad/linear_snr;
+    noise_std_mag = signal_power_mag/linear_snr;
 
     % Draw channel-type-specific Gaussian white noise
     noise = randn(size(sensor, 1), size(sensor, 2));
-    noise(grad_chans, :) = noise_std_grad * noise(grad_chans, :);
-    noise(mag_chans, :) = noise_std_mag * noise(mag_chans, :);
+    noise_power = mean(mean(abs(noise)));
+    noise(grad_chans, :) = noise_std_grad * noise(grad_chans, :) / noise_power;
+    noise(mag_chans, :) = noise_std_mag * noise(mag_chans, :) / noise_power;
 
 
     if mod(iTrial, 10) == 0
@@ -225,8 +227,8 @@ for iTrial = 1:sim_params.nTrials
     end
     
     % Measure achieved SNR before adding noise
-    snr_grad(iTrial) = 10*log10(signal_power_grad/(mean(mean(noise(grad_chans, ref_min:ref_max).^2))));
-    snr_mag(iTrial) = 10*log10(signal_power_mag/(mean(mean(noise(mag_chans, ref_min:ref_max).^2))));
+    snr_grad(iTrial) = 10*log10(signal_power_grad/(mean(mean(abs(noise(grad_chans, ref_min:ref_max))))));
+    snr_mag(iTrial) = 10*log10(signal_power_mag/(mean(mean(abs(noise(mag_chans, ref_min:ref_max))))));
 
     % Add noise; zero out non-MEG channels
     sensor = sensor + noise;
