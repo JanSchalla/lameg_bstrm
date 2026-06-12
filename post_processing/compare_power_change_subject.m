@@ -78,6 +78,7 @@ for i=1:n_contrasts
         pial_mask = pial_t_statistic > pial_thresh;
         white_thresh = prctile(white_t_statistic, roi_cutoff);
         white_mask = white_t_statistic > white_thresh;
+        roi = vertices_white;
     else
         % Compute roi based on specified scout
         pial_mask = zeros(size(pial_diff, 1), 1);
@@ -97,9 +98,9 @@ for i=1:n_contrasts
             separator = "\";
         end
         
-        pial_white_diff_t_statistic = ttest_corrected(pial_white_diff(:, :, i)');
-        pial_white_diff_var         = var (pial_white_diff(:, :, i)');
-        pial_white_diff_mean        = mean(pial_white_diff(:, :, i)');
+        pial_white_diff_t_statistic = ttest_corrected(pial_white_diff(roi, :, i)');
+        pial_white_diff_var         = var (pial_white_diff(roi, :, i)');
+        pial_white_diff_mean        = mean(pial_white_diff(roi, :, i)');
         
         tokens = split(sFiles{1}, separator);
         sSubject = bst_get('Subject', tokens{1});
@@ -123,11 +124,11 @@ for i=1:n_contrasts
         
         % TF is [nSources × nTime × nFreqs]
         tf_template.TF = zeros(nSrc, 1, 5);
-        tf_template.TF(:, 1, 1) = pial_t_statistic;
-        tf_template.TF(:, 1, 2) = white_t_statistic;
-        tf_template.TF(:, 1, 3) = pial_white_diff_t_statistic;
-        tf_template.TF(:, 1, 4) = pial_white_diff_mean;
-        tf_template.TF(:, 1, 5) = pial_white_diff_var;
+        tf_template.TF(roi, 1, 1) = pial_t_statistic;
+        tf_template.TF(roi, 1, 2) = white_t_statistic;
+        tf_template.TF(roi, 1, 3) = pial_white_diff_t_statistic;
+        tf_template.TF(roi, 1, 4) = pial_white_diff_mean;
+        tf_template.TF(roi, 1, 5) = pial_white_diff_var;
         
         % Freqs cell: {label, fmin, fmax} — the label column is what appears in the GUI slider
         tf_template.Freqs = {
