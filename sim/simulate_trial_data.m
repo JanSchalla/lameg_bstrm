@@ -197,7 +197,7 @@ for i = 1:n_locs
     end
 
     sim_struct(i).signal = zeros(1, ns);
-    sim_struct(i).signal(sim_struct(i).t_min_idx : sim_struct(i).t_max_idx) = ...
+    sim_struct(i).signal(sim_struct(i).t_min_idx:sim_struct(i).t_max_idx) = ...
         sin(2 * pi * foi * t) * DipoleMoment;
     sim_struct(i).foi = foi;
     sim_struct(i).woi = woi;
@@ -255,8 +255,8 @@ for iTrial = 1:nTrials
     % %  Compute signal power in the woi for SNR-matched noise generation
     % %  Use the time window of the first (or only) location as reference.
     % % -----------------------------------------------------------------
-    % ref_min = sim_struct(1).t_min_idx;
-    % ref_max = sim_struct(1).t_max_idx;
+    ref_min = sim_struct(1).t_min_idx;
+    ref_max = sim_struct(1).t_max_idx;
     % signal_power_grad = mean(mean(abs(sensor(grad_chans, ref_min:ref_max)), 'omitmissing'));
     % signal_power_mag = mean(mean(abs(sensor(mag_chans, ref_min:ref_max)), 'omitmissing'));
     % 
@@ -277,8 +277,8 @@ for iTrial = 1:nTrials
     % Here i deviate from SPMs apprach and calcualte the rms only over the
     % period where a signal is simualted. Otherwise sensor level data is
     % shows to be to big by ~1-2 orders of magnitude
-    std_GRAD = std(sensor(grad_chans, ref_min:ref_max), [], 2);
-    std_MAG = std(sensor(mag_chans, ref_min:ref_max), [], 2);
+    std_GRAD = std(full(sensor(grad_chans, ref_min:ref_max)), [], 2);
+    std_MAG = std(full(sensor(mag_chans, ref_min:ref_max)), [], 2);
 
     rms_GRAD = mean(std_GRAD);
     rms_MAG = mean(std_MAG);
