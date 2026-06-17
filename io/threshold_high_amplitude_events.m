@@ -104,6 +104,7 @@ edge_cut = 0;
 merge = false;
 burst_epoch = 'first_crossing';
 vis = true;
+min_burst_duration = []; % in s
 %% parse params
 if exist('params', 'var') && ~isempty(params)
 
@@ -130,6 +131,10 @@ if exist('params', 'var') && ~isempty(params)
     if isfield(params, 'merge')
         merge = params.merge;
     end
+    
+    if isfield(params, 'min_burst_duration')
+        min_burst_duration = params.min_burst_duration;
+    end
 end
 % Set up output structure
 burst_properties = struct();
@@ -150,16 +155,38 @@ hilbert_env = abs(hilbert(filtered_signal));
 % Get detection threshold. 
 detection_thresh = prctile(hilbert_env, thresh);
 
+if vis
+    f = figure();
+    tiledlayout(4, 1);
+    fig_width = 1200;
+    fig_height = 1400;
+    set(gcf,'PaperPositionMode','auto');         
+    set(gcf,'PaperOrientation','landscape');
+    set(gcf, 'Position',  [1, 1, 100 + fig_width, 100 + fig_height]);   % Resize fig window
+    
+    nexttile
+    histogram(hilbert_env);
+    xline(detection_thresh, 'LineWidth', 2, 'Color', 'red');
+    title('Amplitude distribution & burst threshold');
+end
+
 % Apply detection threshold to amplitude timeseires 
 % Insert burst (1) or no burst (0) into vector of the size of the original
 % signal!
 burst_vec = zeros(size(signal));
 burst_vec(sfreq*edge_cut+1:end-sfreq*edge_cut) = hilbert_env >= detection_thresh;
-burst_properties.raw_burst_vector = burst_vec;
+% Do not store the unfiltered burst vector due to confusions
+%burst_properties.raw_burst_vector = burst_vec;
 burst_properties.detection_threshold = detection_thresh;
 %% check for validity
-%check for minimum duration of at least one cycle of the lowest frequency
-min_burst_duration = (1/min(freq)/(1/sfreq));
+% Either take minumum duration in seconds and convert to samples or define
+% the minuimum duration as one cycle of the lowest frequency
+if isempty(min_burst_duration)
+    min_burst_duration = (1/min(freq)/(1/sfreq));
+else
+    min_burst_duration = min_burst_duration * sfreq;
+end
+
 CC = bwconncomp(burst_vec);
 burst_properties.raw_CCObj = CC;
 
@@ -243,15 +270,6 @@ burst_properties.used_params = used_params;
 
 %% visualize distribution of events length
 if vis && length(event_idx) > 1
-    f = figure();
-    tiledlayout(3, 1);
-    fig_width = 1200;
-    fig_height = 1400;
-    set(gcf,'PaperPositionMode','auto');         
-    set(gcf,'PaperOrientation','landscape');
-    set(gcf, 'Position',  [1, 1, 100 + fig_width, 100 + fig_height]);   % Resize fig window
-
-    % First tile: unfiltered burst length histogram
     nexttile();
     hold("on");
     histogram(event_length_pre, floor(3.49*std(event_length_pre)*length(event_length_pre)^(1/3)), ...
