@@ -23,7 +23,8 @@ end
 
 nNew_bad = numel(files);
 
-fprintf('Added %i Bad trials to match.', nNew_bad - nOrig_bad)
+fprintf('Added %i Bad trials to match.\n', nNew_bad - nOrig_bad);
+fprintf('Each trial type contains %i BAD trials.\n', round(nNew_bad/2));
 
 % Update brainstormstudy.mat
 study_mat.BadTrials = files';
