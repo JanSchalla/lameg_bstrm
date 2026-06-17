@@ -150,9 +150,11 @@ hilbert_env = abs(hilbert(filtered_signal));
 % Get detection threshold. 
 detection_thresh = prctile(hilbert_env, thresh);
 
-% Apply detection threshold to amplitude timeseires -> Amplitude bigger
-% then threshold -> burst.
-burst_vec = hilbert_env >= detection_thresh;
+% Apply detection threshold to amplitude timeseires 
+% Insert burst (1) or no burst (0) into vector of the size of the original
+% signal!
+burst_vec = zeros(size(signal));
+burst_vec(sfreq*edge_cut+1:end-sfreq*edge_cut) = hilbert_env >= detection_thresh;
 burst_properties.raw_burst_vector = burst_vec;
 burst_properties.detection_threshold = detection_thresh;
 %% check for validity
@@ -217,7 +219,7 @@ end
 
 % Calculate burst descriptives
 burst_proportion = sum(burst_vec) / length(burst_vec); % Same as "fractional occupancy"
-burst_rate = length(event_idx)/length(signal)/sfreq; % bursts per second
+burst_rate = length(event_idx)/(length(signal)/sfreq); % bursts per second
 
 % Fill output structure
 burst_properties.postproc_burst_vector = burst_vec;
