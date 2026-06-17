@@ -23,7 +23,7 @@ function [sFiles, options] = simulate_trial_data(data_struct, headmodel_fname, s
 %                       Either (1×2) for all locations, or (nLocs×2).
 %       .foi          – Frequency of interest [Hz].
 %                       Either scalar or (nLocs×1).
-%       .DipoleMoment - Dipole moment (nAm) to be simulated. Is converted
+%       .DipoleMoment - Dipole strength (nAm) to be simulated. Is converted
 %                       to Am. Either a scalar or (nLocs×1).
 %       .snr_dB       – Target SNR in dB (applied at sensor level).
 %   study_id          – Brainstorm study index (integer).
