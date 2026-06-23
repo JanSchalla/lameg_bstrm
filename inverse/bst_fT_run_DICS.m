@@ -1,15 +1,33 @@
-function bst_fT_run_DICS(DataFile, HeadModelFile, csd_cfg, params)
+function dics_result = bst_fT_run_DICS(DataFile, HeadModelFile, csd_cfg, params)
 
 %% ------------------------------------------------------------------
 %% Defaults
 %% ------------------------------------------------------------------
 
 multilayer = false;
+sr_id = 'None'; % Identifier for SR
+save_results = true;
 
 if exist('params', 'var') && ~isempty(params)
     if isfield(params, 'multilayer')
         multilayer = params.multilayer;
     end
+
+    if isfield(params, 'sr_id')
+        sr_id = params.sr_id;
+    end
+
+    if isfield(params, 'save_results')
+        save_results = params.save_results;
+    end
+end
+
+if strcmp(sr_id, 'None')
+    warning('No Identifier for the source reconstruction specified. Saved results will not be identifiable by name.');
+end
+
+if ~save_results
+    warning('Results are not saved!')
 end
 
 % Ensure FieldTrip is loaded
@@ -41,8 +59,6 @@ protocol_name = tokens(protocol_id);
 
 subject_id = find(ismember(tokens, "data"), 1) + 1;
 subject_name = convertStringsToChars(tokens(subject_id));
-study_name = convertStringsToChars(tokens(subject_id + 1));
-data_name = convertStringsToChars(tokens(subject_id + 2));
 
 % Start brainstorm
 if ~brainstorm('status')
@@ -59,6 +75,8 @@ subj_idx = find(ismember({sProtocol.Subject.Name}, subject_name));
 
 sSubject = sProtocol.Subject(subj_idx);
 clear("sProtocol");
+
+corresponding_surf_idx = find(contains({sSubject.Surface.Comment}, 'corresponding'));
 
 % Ensure FieldTrip is loaded
 if ~exist('ft_defaults', 'file')
@@ -77,14 +95,15 @@ ft_defaults;
 ChannelFile= bst_get('ChannelFileForStudy', DataFile);
 ChannelMat = in_bst_channel(ChannelFile);
 
+MEG_idx = find(contains({ChannelMat.Channel.Type}, 'MEG'));
 
-
+refchanLabel = csd_cfg.label{~contains(csd_cfg.label, 'MEG')};
 
 %% ------------------------------------------------------------------
 %% Step 4: Load precomputed leadfield/head model from Brainstorm
 %% ------------------------------------------------------------------
-
-[ftHeadmodel, ftSourcemodel] = out_fieldtrip_headmodel(HeadModelFile, ChannelMat, extracranialIdx, 1);
+bst_headmodel = in_bst_headmodel(HeadModelFile);
+[ftHeadmodel, ftSourcemodel] = out_fieldtrip_headmodel(bst_headmodel, ChannelMat, MEG_idx, 1);
 
 nSources = numel(ftSourcemodel.leadfield);
 nSurface = nSources / 2;
@@ -94,34 +113,26 @@ fprintf('Loaded leadfield for %d source points (%d per layer)\n', nSources, nSur
 %% Step 5: Run DICS with LFP as reference channel, per band
 %% ------------------------------------------------------------------
 
-dics_result = struct();
+cfg = [];
+cfg.method     = 'dics';
+cfg.refchan    = refchanLabel;
+%cfg.channel    = ftEpoched.label(~ismember(ftEpoched.label, ChannelMat.Channel(iLFP).Name));
+%cfg.frequency  = centerFreq;
+cfg.sourcemodel = ftSourcemodel;
+cfg.headmodel   = ftHeadmodel;        % may be unused if leadfield is precomputed, but FieldTrip still expects the field
+cfg.dics.projectnoise = 'yes';        % ???
+cfg.dics.lambda        = '5%';        % regularization, matches Brainstorm/FieldTrip common default
+cfg.dics.keepfilter    = 'yes';       % needed if you want spatial filters for later time-domain projection
+cfg.dics.realfilter    = 'yes';       % ???
+cfg.dics.fixedori      = 'yes';       % Needed to calcualte single orientation filter
+cfg.dics.weightnorm    = 'nai';       % Needed to calcualte MNPSP
+cfg.dics.keepcsd       = 'yes';       % Not sure if needed
+cfg.reducerank         = 2;
+cfg.grad = csd_cfg.grad;
 
-for b = 1:numel(bandNames)
-    bname = bandNames{b};
-    %band = bandDefs.(bname);
-    %centerFreq = mean(band);
+dics_result = ft_sourceanalysis(cfg, csd_cfg);
 
-    cfg = [];
-    cfg.method     = 'dics';
-    cfg.refchan    = refchanLabel;
-    %cfg.channel    = ftEpoched.label(~ismember(ftEpoched.label, ChannelMat.Channel(iLFP).Name));
-    %cfg.frequency  = centerFreq;
-    cfg.sourcemodel = ftSourcemodel;
-    cfg.headmodel   = ftHeadmodel;        % may be unused if leadfield is precomputed, but FieldTrip still expects the field
-    cfg.dics.projectnoise = 'yes';        % ???
-    cfg.dics.lambda        = '5%';        % regularization, matches Brainstorm/FieldTrip common default
-    cfg.dics.keepfilter    = 'yes';       % needed if you want spatial filters for later time-domain projection
-    cfg.dics.realfilter    = 'yes';       % ???
-    cfg.dics.fixedori      = 'yes';       % Needed to calcualte single orientation filter
-    cfg.dics.weightnorm    = 'nai';       % Needed to calcualte MNPSP
-    cfg.dics.keepcsd       = 'yes';       % Not sure if needed
-    cfg.reducerank         = 2;
-    cfg.grad = freq_csd.(bname).grad;
-
-    dics_result.(bname) = ft_sourceanalysis(cfg, freq_csd.(bname));
-
-    fprintf('DICS complete for band %s\n', bname);
-end
+fprintf('DICS complete for band %s\n', sr_id);
 
 %% ------------------------------------------------------------------
 %% Step 6: Extract coherence with the LFP reference, split by layer
@@ -129,92 +140,104 @@ end
 
 if multilayer
 
-    coh_white = struct();
-    coh_pial  = struct();
-    contrast  = struct();
-    layer_diff = struct();
     epsilon = 1e-6;
     
-    for b = 1:numel(bandNames)
-        bname = bandNames{b};
-        coh_all = dics_result.(bname).avg.coh(:);   % [nSources x 1]
+    coh_all = dics_result.avg.coh(:);   % [nSources x 1]
+
+    coh_white = coh_all(1:nSurface);
+    coh_pial  = coh_all(nSurface+1:end);
+
+    layer_diff = coh_pial - coh_white;
+
+    contrast = log((coh_pial + epsilon) ./ (coh_white + epsilon));
+
+    fprintf('Band %s: mean coh white=%.4f, pial=%.4f\n', sr_id, ...
+        mean(coh_white), mean(coh_pial));
+else  
+    coh_all = dics_result.avg.coh(:);
     
-        coh_white.(bname) = coh_all(1:nSurface);
-        coh_pial.(bname)  = coh_all(nSurface+1:end);
-    
-        layer_diff.(bname) = coh_pial.(bname) - coh_white.(bname);
-    
-        contrast.(bname) = log((coh_pial.(bname) + epsilon) ./ (coh_white.(bname) + epsilon));
-    
-        fprintf('Band %s: mean coh white=%.4f, pial=%.4f\n', bname, ...
-            mean(coh_white.(bname)), mean(coh_pial.(bname)));
-    end
-else
-    for b = 1:numel(bandNames)
-        bname = bandNames{b};
-        
-        coh_all.(bname) = dics_result.(bname).avg.coh(:);
-        
-        fprintf('Band %s: mean coh=%.4f\n', bname, ...
-            mean(coh_all.(bname)));
-    end
+    fprintf('Band %s: mean coh=%.4f\n', sr_id, ...
+        mean(coh_all));
 end
 
 %% ------------------------------------------------------------------
 %% Step 7: Export results back to Brainstorm for visualization
 %% ------------------------------------------------------------------
-
-if multilayer
-    for b = 1:numel(bandNames)
-        bname = bandNames{b};
+if save_results
+    if multilayer
         % Save multilayer results
         ResultsMat = db_template('resultsmat');
-        ResultsMat.ImagingKernel = dics_result.(bname).avg.filter;
-        ResultsMat.ImageGridAmp  = [coh_white.(bname); coh_pial.(bname)];  % full multilayer vector
+        ResultsMat.ImagingKernel = [];
+        ResultsMat.ImageGridAmp  = [coh_white; coh_pial];  % full multilayer vector
         ResultsMat.Time          = 0;
-        ResultsMat.Comment       = sprintf('DICS_coh_STN_%s', bname);
+        ResultsMat.Comment       = sprintf('DICS_coh_STN_%s', sr_id);
         ResultsMat.nComponents   = 1;
-        ResultsMat.SurfaceFile   = sSubject.Surface(multilayer_idx).FileName;
+        ResultsMat.SurfaceFile   = bst_headmodel.SurfaceFile;
     
         OutputFile = fullfile(fileparts(HeadModelFile), ...
-            sprintf('results_DICS_coh_STN_%s.mat', bname));
+            sprintf('results_DICS_coh_STN_%s.mat', sr_id));
         bst_save(OutputFile, ResultsMat, 'v6');
     
-        fprintf('Saved %s DICS coherence map to: %s\n', bname, OutputFile);
+        fprintf('Saved %s DICS coherence map to: %s\n', sr_id, OutputFile);
     
         % Save layer fraction (logarythmic scale)
         ResultsMat = db_template('resultsmat');
         ResultsMat.ImagingKernel = [];
-        ResultsMat.ImageGridAmp  = contrast.(bname);
+        ResultsMat.ImageGridAmp  = contrast;
         ResultsMat.Time          = 0;
-        ResultsMat.Comment       = sprintf('DICS_coh_STN_fract_%s', bname);
+        ResultsMat.Comment       = sprintf('DICS_coh_STN_fract_%s', sr_id);
         ResultsMat.nComponents   = 1;
         ResultsMat.SurfaceFile   = sSubject.Surface(corresponding_surf_idx(1)).FileName;
     
         OutputFile = fullfile(fileparts(HeadModelFile), ...
-            sprintf('results_DICS_coh_STN_fract_%s.mat', bname));
+            sprintf('results_DICS_coh_STN_fract_%s.mat', sr_id));
         bst_save(OutputFile, ResultsMat, 'v6');
     
-        fprintf('Saved %s DICS coherence fraction map to: %s\n', bname, OutputFile);
+        fprintf('Saved %s DICS coherence fraction map to: %s\n', sr_id, OutputFile);
     
         % Save layer difference
         ResultsMat = db_template('resultsmat');
         ResultsMat.ImagingKernel = [];
-        ResultsMat.ImageGridAmp  = layer_diff.(bname);
+        ResultsMat.ImageGridAmp  = layer_diff;
         ResultsMat.Time          = 0;
-        ResultsMat.Comment       = sprintf('DICS_coh_STN_diff_%s', bname);
+        ResultsMat.Comment       = sprintf('DICS_coh_STN_diff_%s', sr_id);
         ResultsMat.nComponents   = 1;
         ResultsMat.SurfaceFile   = sSubject.Surface(corresponding_surf_idx(1)).FileName;
     
         OutputFile = fullfile(fileparts(HeadModelFile), ...
-            sprintf('results_DICS_coh_STN_diff_%s.mat', bname));
+            sprintf('results_DICS_coh_STN_diff_%s.mat', sr_id));
         bst_save(OutputFile, ResultsMat, 'v6');
     
-        fprintf('Saved %s DICS coherence difference map to: %s\n', bname, OutputFile);
+        fprintf('Saved %s DICS coherence difference map to: %s\n', sr_id, OutputFile);
     
         % Save filter and C matrices
         ResultsMat = db_template('resultsmat');
-        ResultsMat.ImagingKernel = vertcat(dics_result.(bname).avg.filter{:});
-        ResultsMat.CSD_data = freq_csd.(bname) 
+        ResultsMat.ImagingKernel = vertcat(dics_result.avg.filter{:});
+        ResultsMat.ImageGridAmp  = [];
+        ResultsMat.Comment       = sprintf('DICS_coh_STN_FilterWeighhts_%s', sr_id);
+        ResultsMat.nComponents   = 1;
+        ResultsMat.Time          = 0;
+        ResultsMat.SurfaceFile   = bst_headmodel.SurfaceFile;
+        
+        OutputFile = fullfile(fileparts(HeadModelFile), ...
+            sprintf('results_DICS_filter_%s.mat', sr_id));
+        bst_save(OutputFile, ResultsMat, 'v6');
+    
+        fprintf('Saved %s DICS Filter to: %s\n', sr_id, OutputFile);
+    else
+        % Save multilayer results
+        ResultsMat = db_template('resultsmat');
+        ResultsMat.ImagingKernel = [];
+        ResultsMat.ImageGridAmp  = [coh_all];  % full multilayer vector
+        ResultsMat.Time          = 0;
+        ResultsMat.Comment       = sprintf('DICS_coh_STN_%s', sr_id);
+        ResultsMat.nComponents   = 1;
+        ResultsMat.SurfaceFile   = bst_headmodel.SurfaceFile;
+    
+        OutputFile = fullfile(fileparts(HeadModelFile), ...
+            sprintf('results_DICS_coh_STN_%s.mat', sr_id));
+        bst_save(OutputFile, ResultsMat, 'v6');
+    
+        fprintf('Saved %s DICS coherence map to: %s\n', sr_id, OutputFile);
     end
 end
