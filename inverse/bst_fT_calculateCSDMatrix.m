@@ -1,4 +1,4 @@
-function bst_fT_calculateCSDMatrix(DataFile, extracranialIdx, intracranialIdx, params)
+function freq_csd = bst_fT_calculateCSDMatrix(DataFile, extracranialIdx, intracranialIdx, params)
 
 %% ------------------------------------------------------------------
 %% Defaults
@@ -6,12 +6,11 @@ function bst_fT_calculateCSDMatrix(DataFile, extracranialIdx, intracranialIdx, p
 
 seg_length_sec = 2;
 seg_overlap = 0.5;
-bandDefs = struct( ...
-    'theta', [4, 7], ...
-    'alpha', [7, 13], ...
-    'beta', [13 30], ...
-    'gamma', [30 60]);
-multilayer = false;
+freq_id = 'None';
+freq_range = [];
+data_cov = false;
+noise_cov = false;
+
 
 if exist('params', 'var') && ~isempty(params)
     if isfield(params, 'seg_length_sec')
@@ -22,29 +21,42 @@ if exist('params', 'var') && ~isempty(params)
         seg_overlap = params.seg_overlap;
     end
 
-    if isfield(params, 'bandDefs')
-        bandDefs = params.bandDefs;
+    if isfield(params, 'freq_id')
+        freq_id = params.freq_id;
     end
 
-    if isfield(params, 'multilayer')
-        multilayer = params.multilayer;
+    if isfield(params, 'freq_range')
+        freq_range = params.freq_range;
+    end
+
+    if isfield(params, 'data_cov')
+        data_cov = params.data_cov;
+    end
+    
+    if isfield(params, 'noise_cov')
+        noise_cov = params.noise_cov;
     end
 end
 
 % Verify input
-bandNames = fieldnames(bandDefs);
-for i = 1:numel(bandNames)
-    if numel(bandDefs.(bandNames{i})) ~= 2
-        error('Frequency band definiton needs one lower and one upper bound!');
-    end
+if isempty(freq_range)
+    error('No Frequency range to calculate cross spectral density supplied (freq_range).');
+end
+
+if strcmp(freq_id, 'None')
+    warning('No Frequency Identifier (freq_id) specified. Data will be non-identifiable.')
 end
 
 if seg_overlap < 0 || seg_overlap > 0.99
-    error('Window overlap is not possible. Specify between 0 - 0.99.');
+    error('Window overlap is not possible. Specify between 0 - 0.99 (seg_overlap).');
 end
 
-if multilayer
-    warning('Multilayer analysis is set to TRUE.');
+if data_cov
+    warning('Fieldtrips CFG will be saved as Data Covariance');
+elseif noise_cov
+    warning('Fieldtrips CFG will be saved as Noise Covariance');
+else
+    error('Not specified, if data covariance (data_cov) or noise covariance (noise_cov) is calculated.');
 end
 
 %% ------------------------------------------------------------------
@@ -64,11 +76,6 @@ tokens = split(DataFile, separator);
 protocol_id = find(ismember(tokens, "brainstorm_db"), 1) + 1;
 protocol_name = tokens(protocol_id);
 
-subject_id = find(ismember(tokens, "data"), 1) + 1;
-subject_name = convertStringsToChars(tokens(subject_id));
-study_name = convertStringsToChars(tokens(subject_id + 1));
-data_name = convertStringsToChars(tokens(subject_id + 2));
-
 % Start brainstorm
 if ~brainstorm('status')
     brainstorm nogui
@@ -77,13 +84,6 @@ end
 % Open protocol
 protocol = bst_get('Protocol', protocol_name);
 gui_brainstorm('SetCurrentProtocol', protocol);
-
-sProtocol = bst_get('ProtocolSubjects');
-
-subj_idx = find(ismember({sProtocol.Subject.Name}, subject_name));
-
-sSubject = sProtocol.Subject(subj_idx);
-clear("sProtocol");
 
 % Ensure FieldTrip is loaded
 if ~exist('ft_defaults', 'file')
@@ -127,7 +127,12 @@ fs = round(1/(time(2) - time(1)));
 
 % Remove bad meg channels/Only keep good channels
 extracranialIdx = extracranialIdx(sFile.ChannelFlag(extracranialIdx) == 1);
-allChanIdx = [extracranialIdx(:); intracranialIdx];
+
+if data_cov 
+    allChanIdx = [extracranialIdx(:); intracranialIdx];
+elseif noise_cov
+    allChanIdx = [extracranialIdx(:)];
+end
 
 ftData = out_fieldtrip_data(DataFile, ChannelMat, allChanIdx, 0);
 ftData.time = {time};
@@ -187,36 +192,43 @@ fprintf('Segmented into %d pseudo-trials of %.1f s each (%.0f%% overlap)\n', ...
 %% Step 3: Compute cross-spectral density matrix per frequency band
 %% ------------------------------------------------------------------
 
-refchanLabel = ChannelMat.Channel(intracranialIdx).Name;
+centerFreq = mean(freq_range);
+halfBW = diff(freq_range)/2;
 
-freq_csd = struct();
+cfg = [];
+cfg.output    = 'powandcsd';
+cfg.method    = 'mtmfft';
+cfg.taper     = 'hanning';   % single taper - segments already provide averaging (see note above)
+cfg.foi       = centerFreq;
+cfg.tapsmofrq = halfBW;      % spectral smoothing matched to band half-width
+cfg.pad         = 'nextpow2'; % From J. Hirschmanns script
+cfg.keeptrials = 'no';       % average CSD across all trials directly
+cfg.channel    = ftEpoched.label;          % all MEG + LFP channels
+cfg.channelcmb = {ftEpoched.label, ftEpoched.label};  % all pairwise combinations
 
-for b = 1:numel(bandNames)
-    bname = bandNames{b};
-    band = bandDefs.(bname);
-    centerFreq = mean(band);
-    halfBW = diff(band)/2;
+freq_csd = ft_freqanalysis(cfg, ftEpoched);
 
-    cfg = [];
-    cfg.output    = 'powandcsd';
-    cfg.method    = 'mtmfft';
-    cfg.taper     = 'hanning';   % single taper - segments already provide averaging (see note above)
-    cfg.foi       = centerFreq;
-    cfg.tapsmofrq = halfBW;      % spectral smoothing matched to band half-width
-    cfg.pad         = 'nextpow2'; % From J. Hirschmanns script
-    cfg.keeptrials = 'no';       % average CSD across all trials directly
-    cfg.channel    = ftEpoched.label;          % all MEG + LFP channels
-    cfg.channelcmb = {ftEpoched.label, ftEpoched.label};  % all pairwise combinations
+fprintf('Computed CSD for band %s (center %.1f Hz, smoothing +/-%.1f Hz)\n', ...
+    freq_id, centerFreq, halfBW);
 
-    freq_csd.(bname) = ft_freqanalysis(cfg, ftEpoched);
+% Save multilayer results
+ResultsMat = db_template('noisecovmat');
+ResultsMat.NoiseCov = freq_csd;
 
-    fprintf('Computed CSD for band %s (center %.1f Hz, smoothing +/-%.1f Hz)\n', ...
-        bname, centerFreq, halfBW);
-
-    % Reorder Cross-Spectrum into matrix (drop LFP
-    chanlabels = freq_csd.(bname).label(~(contains(freq_csd.(bname).label, 'LFP')));     % canonical channel order
-    Nchan = numel(chanlabels);
-    data_cov = nan(Nchan, Nchan);
-
-    [a_test, b_test] = build_csd_matrix(freq_csd.(bname),  ChannelMat.Channel(extracranialIdx).Name);
+if data_cov
+    OutputFile = fullfile(fileparts(DataFile), ...
+        sprintf('ndatacov_CSD_fieldtrip_%s.mat', freq_id));
+    covariance_comment = sprintf('Data Cross Spectral Density (%s, Fieldtrips cfg)', freq_id);
+elseif noise_cov
+    OutputFile = fullfile(fileparts(DataFile), ...
+        sprintf('noisecov_CSD_fieldtrip_%s.mat', freq_id));
+    covariance_comment = sprintf('Noise Cross Spectral Density (%s, Fieldtrips cfg)', freq_id);
 end
+
+ResultsMat.Comment = covariance_comment;
+
+
+bst_save(OutputFile, ResultsMat, 'v6');
+
+fprintf('Saved %s FieldTrip CSD to: %s\n', freq_id, OutputFile);
+
