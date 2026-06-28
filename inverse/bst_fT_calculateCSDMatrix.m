@@ -110,7 +110,7 @@ if isstruct(sFile.F)
     end
 
     % Load raw source
-    [~, time, ~] = in_fread(sFile.F, channels, 1, []);
+    [~, time, ~] = in_fread(sFile.F, ChannelMat, 1, []);
     
     % Grab BAD events for later
     bad_event_idx = find(contains({sFile.F.events.label}, 'BAD'));
@@ -143,7 +143,6 @@ fprintf('Exported %d channels, %d samples (%.1f min) at %d Hz\n', ...
     numel(ftData.time{1})/fs/60, fs);
 
 % remove bad segments
-
 keepSamples = true(size(ftData.time{1}));
 for iBad = 1:numel(bad_event_idx)
     for iEvents = 1:numel(sFile.F.events(bad_event_idx(iBad)).epochs)
