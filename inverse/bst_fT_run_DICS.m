@@ -7,6 +7,7 @@ function dics_result = bst_fT_run_DICS(DataFile, HeadModelFile, csd_cfg, params)
 multilayer = false;
 sr_id = 'None'; % Identifier for SR
 save_results = true;
+iWhite = [];
 
 if exist('params', 'var') && ~isempty(params)
     if isfield(params, 'multilayer')
@@ -19,6 +20,10 @@ if exist('params', 'var') && ~isempty(params)
 
     if isfield(params, 'save_results')
         save_results = params.save_results;
+    end
+    
+    if isfield(params, 'iWhite')
+        iWhite = params.iWhite;
     end
 end
 
@@ -97,12 +102,24 @@ ChannelMat = in_bst_channel(ChannelFile);
 
 MEG_idx = find(contains({ChannelMat.Channel.Type}, 'MEG'));
 
+% If not whitener supplied, multiply leadfield by identity -> same as doing
+% nothing
+if isempty(iWhite)
+    iWhite = eye(numel(MEG_idx));
+end
+
 refchanLabel = csd_cfg.label{~contains(csd_cfg.label, 'MEG')};
 
 %% ------------------------------------------------------------------
 %% Step 4: Load precomputed leadfield/head model from Brainstorm
 %% ------------------------------------------------------------------
 bst_headmodel = in_bst_headmodel(HeadModelFile);
+
+% Multiply whitener by leadfield to bring the leadfield into the same space
+% as the provided crsspectrum -> if no whitener is specified (assuming no
+% whitener applied), leadfield is multiplied by identity, leaving it as is.
+bst_headmodel.Gain = iWhite(MEG_idx, MEG_idx) * bst_headmodel.Gain(MEG_idx, :);
+
 [ftHeadmodel, ftSourcemodel] = out_fieldtrip_headmodel(bst_headmodel, ChannelMat, MEG_idx, 1);
 
 nSources = numel(ftSourcemodel.leadfield);
