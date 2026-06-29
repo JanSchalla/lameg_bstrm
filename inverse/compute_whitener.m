@@ -1,4 +1,4 @@
-function [Cy, iW] = compute_whitener(Cy)
+function [Cy, W] = compute_whitener(Cy)
 
 [Un, Sn2] = svd(Cy, 'econ');
 Sn = sqrt(diag(Sn2));
@@ -16,5 +16,7 @@ Sn = max(Sn, median(Sn));
 % Rebuild cov again
 Cy = Un * diag(Sn.^2) * Un';
 
-% Build Whitener
-iW = Un * diag(1./Sn)*Un';
+% Build Whitener (In brainstorm the inverse whitener is build
+%iW = Un * diag(1./Sn)*Un';
+% I = W * iW
+W = Un * diag(Sn) * Un';
