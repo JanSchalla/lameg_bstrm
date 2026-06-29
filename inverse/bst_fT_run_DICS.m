@@ -118,7 +118,7 @@ bst_headmodel = in_bst_headmodel(HeadModelFile);
 % Multiply whitener by leadfield to bring the leadfield into the same space
 % as the provided crsspectrum -> if no whitener is specified (assuming no
 % whitener applied), leadfield is multiplied by identity, leaving it as is.
-bst_headmodel.Gain = iWhite(MEG_idx, MEG_idx) * bst_headmodel.Gain(MEG_idx, :);
+bst_headmodel.Gain(MEG_idx, :) = real(iWhite(MEG_idx, MEG_idx)) * bst_headmodel.Gain(MEG_idx, :);
 
 [ftHeadmodel, ftSourcemodel] = out_fieldtrip_headmodel(bst_headmodel, ChannelMat, MEG_idx, 1);
 
