@@ -187,6 +187,21 @@ n_segments = numel(ftEpoched.trial);
 fprintf('Segmented into %d pseudo-trials of %.1f s each (%.0f%% overlap)\n', ...
     n_segments, seg_length_sec, seg_overlap*100);
 
+
+%% ------------------------------------------------------------------
+%% Step 2.5: Whiten the data, via fieldtrips whitening function
+%% ------------------------------------------------------------------
+% % calculate covariance of sensor data
+% cfg            = [];
+% cfg.covariance = 'yes';
+% baseline_avg   = ft_timelockanalysis(cfg, ftEpoched);
+% 
+% % Whiten data with its own covariance
+% cfg            = [];
+% cfg.channel    = 'meg';
+% cfg.kappa      = min(kappa_mag,kappa_grad);
+% dataw_meg      = ft_denoise_prewhiten(cfg, data, baseline_avg);
+
 %% ------------------------------------------------------------------
 %% Step 3: Compute cross-spectral density matrix per frequency band
 %% ------------------------------------------------------------------
