@@ -102,8 +102,8 @@ ChannelMat = in_bst_channel(ChannelFile);
 
 MEG_idx = find(contains({ChannelMat.Channel.Type}, 'MEG'));
 
-% If not whitener supplied, multiply leadfield by identity -> same as doing
-% nothing
+% % If not whitener supplied, multiply leadfield by identity -> same as doing
+% % nothing
 if isempty(iWhite)
     iWhite = eye(numel(MEG_idx));
 end
@@ -118,7 +118,7 @@ bst_headmodel = in_bst_headmodel(HeadModelFile);
 % Multiply whitener by leadfield to bring the leadfield into the same space
 % as the provided crsspectrum -> if no whitener is specified (assuming no
 % whitener applied), leadfield is multiplied by identity, leaving it as is.
-bst_headmodel.Gain(MEG_idx, :) = real(iWhite(MEG_idx, MEG_idx)) * bst_headmodel.Gain(MEG_idx, :);
+bst_headmodel.Gain(MEG_idx, :) = iWhite(MEG_idx, MEG_idx) * bst_headmodel.Gain(MEG_idx, :);
 
 [ftHeadmodel, ftSourcemodel] = out_fieldtrip_headmodel(bst_headmodel, ChannelMat, MEG_idx, 1);
 
@@ -146,6 +146,7 @@ cfg.dics.weightnorm    = 'nai';       % Needed to calcualte MNPSP
 cfg.dics.keepcsd       = 'yes';       % Not sure if needed
 cfg.reducerank         = 2;
 cfg.grad = csd_cfg.grad;
+cfg.whiten = 'yes';
 
 dics_result = ft_sourceanalysis(cfg, csd_cfg);
 
@@ -168,13 +169,16 @@ if multilayer
 
     contrast = log((coh_pial + epsilon) ./ (coh_white + epsilon));
 
-    fprintf('Band %s: mean coh white=%.4f, pial=%.4f\n', sr_id, ...
-        mean(coh_white), mean(coh_pial));
+    [wCoh, wCoh_idx] = max(coh_white);
+    [pCoh, pCoh_idx] = max(coh_pial);
+
+    fprintf('Band %s: max coh white=%.4f (Vertex: %i), pial=%.4f (Vertex: %i)\n', sr_id, ...
+        wCoh, wCoh_idx, pCoh, pCoh_idx);
 else  
     coh_all = dics_result.avg.coh(:);
     
     fprintf('Band %s: mean coh=%.4f\n', sr_id, ...
-        mean(coh_all));
+        max(coh_all));
 end
 
 %% ------------------------------------------------------------------
