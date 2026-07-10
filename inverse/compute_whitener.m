@@ -20,7 +20,6 @@ Rank_Noise = sum(Sn > tol);
 Un = Un(:, 1:Rank_Noise);
 Sn = Sn(1:Rank_Noise);
 
-
 % Bild whitener. s^-0.5 = 1/sqrt(s) -> before we took already the sqrt(s),
 % so now computing the whitener as u * (1./s) * u' = u * s^-0.5 * u'!!
 if strcmp(method, 'none')
