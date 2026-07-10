@@ -19,7 +19,7 @@ function New_multilayer_fname = tess_create_multilayer_mesh(n_layers, wm_high_re
 %       pial_high_res- [string] Full path to high-res pial surface file (*.mat) 
 %       params       - [struct] (optional) Processing parameters:
 %                       - .keep_proc_files  - [bool] Keep intermediate files (default: true)
-%                       - .newNbVertices    - [scalar] Target vertex count (default: 15002)
+%                       - .newNbVertices    - [scalar] Target vertex count (default: 15000)
 %                       - .inflation_function- ['linear'|'cos'] Spacing function (default: 'linear')
 %
 %  OUTPUTS:
@@ -44,7 +44,7 @@ function New_multilayer_fname = tess_create_multilayer_mesh(n_layers, wm_high_re
 
 %defaults
 keep_proc_files = true;
-newNbVertices = 15002;
+newNbVertices = 15000;
 inflation_function = 'linear';
 mode_auto = false;
 
@@ -132,21 +132,9 @@ end
 % Load in downsampled surface
 TessMat_wm_ds = in_tess_bst(ds_firstSurf);
 
-% % Update naming & comment of the first surface
-% tok = regexp(ds_firstSurf, '(\d+)V\.mat', 'tokens');
-% nVerts_path = str2num(tok{1}{1});
-
 TessMat_wm_ds.Comment = sprintf('%s_corresponding', TessMat_wm_ds.Comment);
-% nVerts_new = size(TessMat_wm_ds.Vertices, 1);
-
-% ds_firstSurf_new = strrep(ds_firstSurf, sprintf('%dV.mat', nVerts_path), sprintf('%dV.mat', nVerts_new));
 
 bst_save(ds_firstSurf, TessMat_wm_ds, 'v7');
-% Delete old file
-% delete(ds_firstSurf);
-% 
-% % Overwrite path
-% ds_firstSurf = ds_firstSurf_new;
 
 layer_fnames = cell(n_layers, 1);
 
@@ -215,7 +203,7 @@ end
 
 %% Compute Normals 
 % Compute link vectors 
-% (Work best when doing laMEG: 10.1016/j.neuroimage.2020.116862)
+% (Works best when doing laMEG: 10.1016/j.neuroimage.2020.116862)
 % TO-DO: Offer up alternative ways of computing link vectors
 
 fprintf('Computing link vectors between smallest and biggest surface ...\n');
@@ -344,6 +332,7 @@ for i = 1:length(TessMat.Atlas)
 end
 
 TessMat.Atlas = new_atlas_struct;
+
 %If adding this somehow database gets corrupted and cannot open multilayer
 %mesh
 %TessMat = bst_history('add', TessMat, 'merge multilayer scouts', 'Merge completed');
