@@ -7,6 +7,7 @@ freq_id = 'None';
 freq_range = [];
 data_cov = false;
 noise_cov = false;
+outpath = [];
 
 if exist('params', 'var') && ~isempty(params)
     if isfield(params, 'freq_id')
@@ -23,6 +24,10 @@ if exist('params', 'var') && ~isempty(params)
     
     if isfield(params, 'noise_cov')
         noise_cov = params.noise_cov;
+    end
+
+    if isfield(params, 'outpath')
+        outpath = params.outpath;
     end
 end
 
@@ -67,21 +72,26 @@ fprintf('Computed CSD for band %s (center %.1f Hz, smoothing +/-%.1f Hz)\n', ...
     freq_id, centerFreq, halfBW);
 
 % % Save multilayer results
-% ResultsMat = db_template('noisecovmat');
-% ResultsMat.NoiseCov = freq_csd;
-% 
-% if data_cov
-%     OutputFile = fullfile(fileparts(DataFile), ...
-%         sprintf('ndatacov_CSD_fieldtrip_%s.mat', freq_id));
-%     covariance_comment = sprintf('Data Cross Spectral Density (%s, Fieldtrips cfg)', freq_id);
-% elseif noise_cov
-%     OutputFile = fullfile(fileparts(DataFile), ...
-%         sprintf('noisecov_CSD_fieldtrip_%s.mat', freq_id));
-%     covariance_comment = sprintf('Noise Cross Spectral Density (%s, Fieldtrips cfg)', freq_id);
-% end
-% 
-% ResultsMat.Comment = covariance_comment;
-% 
-% bst_save(OutputFile, ResultsMat, 'v6');
-% 
-% fprintf('Saved %s FieldTrip CSD to: %s\n', freq_id, OutputFile);
+ResultsMat = db_template('noisecovmat');
+ResultsMat.NoiseCov = freq_csd;
+
+% If not outpath is specified, save in pwd!
+if isempty(outpath)
+    outpath = pwd();
+end
+
+if data_cov
+    OutputFile = fullfile(outpath, ...
+        sprintf('fieldtrip_data_CSD_%s.mat', freq_id));
+    covariance_comment = sprintf('Data Cross Spectral Density (%s, Fieldtrips cfg)', freq_id);
+elseif noise_cov
+    OutputFile = fullfile(outpath, ...
+        sprintf('fieldtrip_noise_CSD_%s.mat', freq_id));
+    covariance_comment = sprintf('Noise Cross Spectral Density (%s, Fieldtrips cfg)', freq_id);
+end
+
+ResultsMat.Comment = covariance_comment;
+
+bst_save(OutputFile, ResultsMat, 'v6');
+
+fprintf('Saved %s FieldTrip CSD to: %s\n', freq_id, OutputFile);
