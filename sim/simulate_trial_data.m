@@ -23,7 +23,7 @@ function [sFiles, options] = simulate_trial_data(data_struct, headmodel_fname, s
 %                       Either (1×2) for all locations, or (nLocs×2).
 %       .foi          – Frequency of interest [Hz].
 %                       Either scalar or (nLocs×1).
-%       .DipoleMoment - Dipole moment (nAm) to be simulated. Is converted
+%       .DipoleMoment - Dipole strength (nAm) to be simulated. Is converted
 %                       to Am. Either a scalar or (nLocs×1).
 %       .snr_dB       – Target SNR in dB (applied at sensor level).
 %   study_id          – Brainstorm study index (integer).
@@ -197,7 +197,7 @@ for i = 1:n_locs
     end
 
     sim_struct(i).signal = zeros(1, ns);
-    sim_struct(i).signal(sim_struct(i).t_min_idx : sim_struct(i).t_max_idx) = ...
+    sim_struct(i).signal(sim_struct(i).t_min_idx:sim_struct(i).t_max_idx) = ...
         sin(2 * pi * foi * t) * DipoleMoment;
     sim_struct(i).foi = foi;
     sim_struct(i).woi = woi;
@@ -255,8 +255,8 @@ for iTrial = 1:nTrials
     % %  Compute signal power in the woi for SNR-matched noise generation
     % %  Use the time window of the first (or only) location as reference.
     % % -----------------------------------------------------------------
-    % ref_min = sim_struct(1).t_min_idx;
-    % ref_max = sim_struct(1).t_max_idx;
+    ref_min = sim_struct(1).t_min_idx;
+    ref_max = sim_struct(1).t_max_idx;
     % signal_power_grad = mean(mean(abs(sensor(grad_chans, ref_min:ref_max)), 'omitmissing'));
     % signal_power_mag = mean(mean(abs(sensor(mag_chans, ref_min:ref_max)), 'omitmissing'));
     % 
@@ -277,15 +277,15 @@ for iTrial = 1:nTrials
     % Here i deviate from SPMs apprach and calcualte the rms only over the
     % period where a signal is simualted. Otherwise sensor level data is
     % shows to be to big by ~1-2 orders of magnitude
-    std_GRAD = std(sensor(grad_chans, ref_min:ref_max), [], 2);
-    std_MAG = std(sensor(mag_chans, ref_min:ref_max), [], 2);
+    std_GRAD = std(full(sensor(grad_chans, ref_min:ref_max)), [], 2); % 1e-11
+    std_MAG = std(full(sensor(mag_chans, ref_min:ref_max)), [], 2); % 1e-13
 
-    rms_GRAD = mean(std_GRAD);
-    rms_MAG = mean(std_MAG);
+    rms_GRAD = mean(std_GRAD); % 3.12e-13
+    rms_MAG = mean(std_MAG); %1.5e-14
 
     % Scale noise separately for grad and mag
-    whitenoise_GRAD = rms_GRAD .* (10^(-snr_dB/20));
-    whitenoise_MAG = rms_MAG .* (10^(-snr_dB/20));
+    whitenoise_GRAD = rms_GRAD .* (10^(-snr_dB/20)); %3.12e-13
+    whitenoise_MAG = rms_MAG .* (10^(-snr_dB/20)); % 1.5e-14
 
     noise = zeros(size(sensor));
     noise(grad_chans, :) = randn(size(sensor(grad_chans, :))) * whitenoise_GRAD;
@@ -306,7 +306,15 @@ for iTrial = 1:nTrials
     % Add noise; zero out non-MEG channels
     sensor = full(sensor) + noise;
     sensor(~mag_chans & ~grad_chans, :) = 0;
-    
+
+    %% Estimate Source SNR (DOI: 10.1002/hbm.20571)
+    % source_a = DipoleMoment;
+    % N = sum(mag_chans) + sum(grad_chans);
+    % sensor_b = max(sensor(mag_chans | grad_chans, :).^2');
+    % sensor_s = var(noise(mag_chans | grad_chans, :), [], 2);
+    % 
+    % SNR = 10*log10(source_a/N*sum(sensor_b'./sensor_s));
+
     % -----------------------------------------------------------------
     %  Populate datamat and save to Brainstorm database
     % -----------------------------------------------------------------

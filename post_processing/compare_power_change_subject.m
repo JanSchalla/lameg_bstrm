@@ -143,7 +143,7 @@ for i=1:n_contrasts
             datestr(now,'dd/mm/yy-HH:MM'), 'compute', 'Save multilayer whole brain results'
         };
         
-        % BugFix Visualization (Dirty Fixc, but working for the moment)
+        % BugFix Visualization (Dirty Fix, but working for the moment)
         tf_template.GridLoc    = [];
         tf_template.GridAtlas  = [];
 
