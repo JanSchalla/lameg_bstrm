@@ -83,16 +83,6 @@ clear("sProtocol");
 
 corresponding_surf_idx = find(contains({sSubject.Surface.Comment}, 'corresponding'));
 
-% Ensure FieldTrip is loaded
-if ~exist('ft_defaults', 'file')
-    [isInstalled, errMsg] = bst_plugin('Install', 'fieldtrip');
-    if ~isInstalled
-        error('Could not load FieldTrip plugin via Brainstorm: %s', errMsg);
-    end
-    bst_plugin('Load', 'fieldtrip');
-end
-ft_defaults;
-
 %% ------------------------------------------------------------------
 %% Step 1: Load brainstorm data and export to fieldtrip
 %% ------------------------------------------------------------------
@@ -102,12 +92,17 @@ ChannelMat = in_bst_channel(ChannelFile);
 
 MEG_idx = find(contains({ChannelMat.Channel.Type}, 'MEG'));
 
+% Update MEG_idx to only contain channels also present in cfg_csd!
+good_chans = ismember({ChannelMat.Channel(MEG_idx).Name}, csd_cfg.label);
+MEG_idx = MEG_idx(good_chans);
+
 % % If not whitener supplied, multiply leadfield by identity -> same as doing
 % % nothing
 if isempty(iWhite)
     iWhite = eye(numel(MEG_idx));
 end
 
+%% Assumption: Supplied cfg_csd only contains MEG & one reference channel!
 refchanLabel = csd_cfg.label{~contains(csd_cfg.label, 'MEG')};
 
 %% ------------------------------------------------------------------
@@ -118,7 +113,7 @@ bst_headmodel = in_bst_headmodel(HeadModelFile);
 % Multiply whitener by leadfield to bring the leadfield into the same space
 % as the provided crsspectrum -> if no whitener is specified (assuming no
 % whitener applied), leadfield is multiplied by identity, leaving it as is.
-bst_headmodel.Gain(MEG_idx, :) = iWhite(MEG_idx, MEG_idx) * bst_headmodel.Gain(MEG_idx, :);
+bst_headmodel.Gain(MEG_idx, :) = iWhite * bst_headmodel.Gain(MEG_idx, :);
 
 [ftHeadmodel, ftSourcemodel] = out_fieldtrip_headmodel(bst_headmodel, ChannelMat, MEG_idx, 1);
 
@@ -144,7 +139,7 @@ cfg.dics.realfilter    = 'yes';       % ???
 cfg.dics.fixedori      = 'yes';       % Needed to calcualte single orientation filter
 cfg.dics.weightnorm    = 'nai';       % Needed to calcualte MNPSP
 cfg.dics.keepcsd       = 'yes';       % Not sure if needed
-cfg.reducerank         = 2;
+cfg.reducerank         = 2;           % I get the warning, not used
 cfg.grad = csd_cfg.grad;
 cfg.whiten = 'yes';
 
@@ -173,7 +168,7 @@ if multilayer
     [pCoh, pCoh_idx] = max(coh_pial);
 
     fprintf('Band %s: max coh white=%.4f (Vertex: %i), pial=%.4f (Vertex: %i)\n', sr_id, ...
-        wCoh, wCoh_idx, pCoh, pCoh_idx);
+        wCoh, wCoh_idx, pCoh, pCoh_idx+nSurface);
 else  
     coh_all = dics_result.avg.coh(:);
     
@@ -196,52 +191,52 @@ if save_results
         ResultsMat.SurfaceFile   = bst_headmodel.SurfaceFile;
     
         OutputFile = fullfile(fileparts(HeadModelFile), ...
-            sprintf('results_DICS_coh_STN_%s.mat', sr_id));
+            sprintf('results_DICS_coh_%s_%s.mat', refchanLabel, sr_id));
         bst_save(OutputFile, ResultsMat, 'v6');
     
         fprintf('Saved %s DICS coherence map to: %s\n', sr_id, OutputFile);
     
-        % Save layer fraction (logarythmic scale)
-        ResultsMat = db_template('resultsmat');
-        ResultsMat.ImagingKernel = [];
-        ResultsMat.ImageGridAmp  = contrast;
-        ResultsMat.Time          = 0;
-        ResultsMat.Comment       = sprintf('DICS_coh_STN_fract_%s', sr_id);
-        ResultsMat.nComponents   = 1;
-        ResultsMat.SurfaceFile   = sSubject.Surface(corresponding_surf_idx(1)).FileName;
+        % % Save layer fraction (logarythmic scale)
+        % ResultsMat = db_template('resultsmat');
+        % ResultsMat.ImagingKernel = [];
+        % ResultsMat.ImageGridAmp  = contrast;
+        % ResultsMat.Time          = 0;
+        % ResultsMat.Comment       = sprintf('DICS_coh_STN_fract_%s', sr_id);
+        % ResultsMat.nComponents   = 1;
+        % ResultsMat.SurfaceFile   = sSubject.Surface(corresponding_surf_idx(1)).FileName;
+        % 
+        % OutputFile = fullfile(fileparts(HeadModelFile), ...
+        %     sprintf('results_DICS_coh_STN_fract_%s.mat', sr_id));
+        % bst_save(OutputFile, ResultsMat, 'v6');
+        % 
+        % fprintf('Saved %s DICS coherence fraction map to: %s\n', sr_id, OutputFile);
+        % 
+        % % Save layer difference
+        % ResultsMat = db_template('resultsmat');
+        % ResultsMat.ImagingKernel = [];
+        % ResultsMat.ImageGridAmp  = layer_diff;
+        % ResultsMat.Time          = 0;
+        % ResultsMat.Comment       = sprintf('DICS_coh_STN_diff_%s', sr_id);
+        % ResultsMat.nComponents   = 1;
+        % ResultsMat.SurfaceFile   = sSubject.Surface(corresponding_surf_idx(1)).FileName;
+        % 
+        % OutputFile = fullfile(fileparts(HeadModelFile), ...
+        %     sprintf('results_DICS_coh_STN_diff_%s.mat', sr_id));
+        % bst_save(OutputFile, ResultsMat, 'v6');
+        % 
+        % fprintf('Saved %s DICS coherence difference map to: %s\n', sr_id, OutputFile);
     
-        OutputFile = fullfile(fileparts(HeadModelFile), ...
-            sprintf('results_DICS_coh_STN_fract_%s.mat', sr_id));
-        bst_save(OutputFile, ResultsMat, 'v6');
-    
-        fprintf('Saved %s DICS coherence fraction map to: %s\n', sr_id, OutputFile);
-    
-        % Save layer difference
-        ResultsMat = db_template('resultsmat');
-        ResultsMat.ImagingKernel = [];
-        ResultsMat.ImageGridAmp  = layer_diff;
-        ResultsMat.Time          = 0;
-        ResultsMat.Comment       = sprintf('DICS_coh_STN_diff_%s', sr_id);
-        ResultsMat.nComponents   = 1;
-        ResultsMat.SurfaceFile   = sSubject.Surface(corresponding_surf_idx(1)).FileName;
-    
-        OutputFile = fullfile(fileparts(HeadModelFile), ...
-            sprintf('results_DICS_coh_STN_diff_%s.mat', sr_id));
-        bst_save(OutputFile, ResultsMat, 'v6');
-    
-        fprintf('Saved %s DICS coherence difference map to: %s\n', sr_id, OutputFile);
-    
-        % Save filter and C matrices
+        % Save filter
         ResultsMat = db_template('resultsmat');
         ResultsMat.ImagingKernel = vertcat(dics_result.avg.filter{:});
         ResultsMat.ImageGridAmp  = [];
-        ResultsMat.Comment       = sprintf('DICS_coh_STN_FilterWeighhts_%s', sr_id);
+        ResultsMat.Comment       = sprintf('DICS_coh_%s_FilterWeighhts_%s', refchanLabel, sr_id);
         ResultsMat.nComponents   = 1;
         ResultsMat.Time          = 0;
         ResultsMat.SurfaceFile   = bst_headmodel.SurfaceFile;
         
         OutputFile = fullfile(fileparts(HeadModelFile), ...
-            sprintf('results_DICS_filter_%s.mat', sr_id));
+            sprintf('results_DICS_filter_%s_%s.mat', refchanLabel, sr_id));
         bst_save(OutputFile, ResultsMat, 'v6');
     
         fprintf('Saved %s DICS Filter to: %s\n', sr_id, OutputFile);
