@@ -186,7 +186,7 @@ if save_results
         ResultsMat.ImagingKernel = [];
         ResultsMat.ImageGridAmp  = [coh_white; coh_pial];  % full multilayer vector
         ResultsMat.Time          = 0;
-        ResultsMat.Comment       = sprintf('DICS_coh_STN_%s', sr_id);
+        ResultsMat.Comment       = sprintf('DICS_coh_%s_%s', refchanLabel, sr_id);
         ResultsMat.nComponents   = 1;
         ResultsMat.SurfaceFile   = bst_headmodel.SurfaceFile;
     
