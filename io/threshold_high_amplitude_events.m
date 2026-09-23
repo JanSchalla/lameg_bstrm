@@ -153,6 +153,7 @@ sfreq = round(1/(time(2)-time(1)));
 edge_space_samples = edge_space*sfreq;
 
 %% bandpass filter the signal
+no_signal = signal == 0;
 filtered_signal = bandpass(signal(sfreq*edge_cut+1:end-sfreq*edge_cut), freq, sfreq);
 
 %% threshold signal
@@ -160,8 +161,9 @@ filtered_signal = bandpass(signal(sfreq*edge_cut+1:end-sfreq*edge_cut), freq, sf
 % Here one can also take the square of the absolute to get the instantaneous
 % power
 hilbert_env = abs(hilbert(filtered_signal));
-% Get detection threshold. 
+hilbert_env(no_signal) = nan; % Set 0s to nan to not bias percentile threshold
 
+% Get detection threshold. 
 % use custom threshold if supplied, otherwise fall back on percentile
 if isempty(custom_thresh)
     detection_thresh = prctile(hilbert_env, perc_thresh);
@@ -240,14 +242,13 @@ for i = 1:CC.NumObjects
         %get length of suffiently long bursts
         event_length_post(end+1) = (numel(idx)/sfreq)*1000; %converting duration of burst to ms
         
-        event = signal(idx+sfreq*edge_cut);
-        event = event - mean(event);
+        event = hilbert_env(idx-sfreq*edge_cut);
         
         % Get burst idx depending on specified method
         if strcmp(burst_epoch, 'first_crossing')
             event_idx(end+1) = idx(1); % Take beginning of the burst
         elseif strcmp(burst_epoch, 'max_amplitude')
-            [~, relative_idx] = max(abs(event)); % find peak burst activity
+            [~, relative_idx] = max(event); % find peak burst activity
             event_idx(end+1) = idx(relative_idx); % get global index of that peak idx.
         elseif strcmp(burst_epoch, 'end_crossing')
             event_idx(end+1) = idx(end); % Take end of the burst
