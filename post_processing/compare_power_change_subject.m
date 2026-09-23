@@ -5,7 +5,7 @@ if ~brainstorm('status')
 end
 
 % Set defaults
-roi_cutoff = 70;
+roi_cutoff = 80; % As in Bonaiuto et al., 2018
 tail = 0;
 roi = [];
 verbose = true;
@@ -68,7 +68,7 @@ for i=1:n_contrasts
     % Calcualte correction metric (https://doi.org/10.1016/j.neuroimage.2011.10.027)
     % Correction is applied below
     var_full_map = var(pial_white_diff(:, :, i), [], 2);
-    delta = 1e-3 * max(var_full_map);
+    delta = 0.1 * max(var_full_map);
 
     if isempty(roi)
         % Compute global roi
@@ -78,16 +78,26 @@ for i=1:n_contrasts
         pial_mask = pial_t_statistic > pial_thresh;
         white_thresh = prctile(white_t_statistic, roi_cutoff);
         white_mask = white_t_statistic > white_thresh;
-        roi = vertices_white;
+        roi_vis = vertices_white;
     else
-        % Compute roi based on specified scout
-        pial_mask = zeros(size(pial_diff, 1), 1);
-        pial_mask(roi) = true; 
-        white_mask = zeros(size(pial_diff, 1), 1);
-        white_mask(roi) = true;    
+        % % Compute roi based on specified scout
+        % pial_mask = zeros(size(pial_diff, 1), 1);
+        % pial_mask(roi) = true; 
+        % white_mask = zeros(size(pial_diff, 1), 1);
+        % white_mask(roi) = true;    
+        % 
+        % pial_t_statistic = ttest_corrected(pial_diff(logical(pial_mask), :, i)');
+        % white_t_statistic = ttest_corrected(white_diff(logical(white_mask), :, i)');
 
-        pial_t_statistic = ttest_corrected(pial_diff(logical(pial_mask), :, i)');
-        white_t_statistic = ttest_corrected(white_diff(logical(white_mask), :, i)');
+        %% Maybe also take only the most active vertices in the roi
+        pial_t_statistic = ttest_corrected(pial_diff(roi, :, i)');
+        white_t_statistic = ttest_corrected(white_diff(roi, :, i)');
+        pial_thresh = prctile(pial_t_statistic, roi_cutoff);
+        pial_mask = pial_t_statistic > pial_thresh;
+        white_thresh = prctile(white_t_statistic, roi_cutoff);
+        white_mask = white_t_statistic > white_thresh;
+        
+        roi_vis = roi;
     end
 
     if create_vis
@@ -98,9 +108,9 @@ for i=1:n_contrasts
             separator = "\";
         end
         
-        pial_white_diff_t_statistic = ttest_corrected(pial_white_diff(roi, :, i)');
-        pial_white_diff_var         = var (pial_white_diff(roi, :, i)');
-        pial_white_diff_mean        = mean(pial_white_diff(roi, :, i)');
+        pial_white_diff_t_statistic = ttest_corrected(pial_white_diff(roi_vis, :, i)');
+        pial_white_diff_var         = var (pial_white_diff(roi_vis, :, i)');
+        pial_white_diff_mean        = mean(pial_white_diff(roi_vis, :, i)');
         
         tokens = split(sFiles{1}, separator);
         sSubject = bst_get('Subject', tokens{1});
@@ -124,19 +134,19 @@ for i=1:n_contrasts
         
         % TF is [nSources × nTime × nFreqs]
         tf_template.TF = zeros(nSrc, 1, 5);
-        tf_template.TF(roi, 1, 1) = pial_t_statistic;
-        tf_template.TF(roi, 1, 2) = white_t_statistic;
-        tf_template.TF(roi, 1, 3) = pial_white_diff_t_statistic;
-        tf_template.TF(roi, 1, 4) = pial_white_diff_mean;
-        tf_template.TF(roi, 1, 5) = pial_white_diff_var;
+        tf_template.TF(roi_vis, 1, 1) = pial_t_statistic;
+        tf_template.TF(roi_vis, 1, 2) = white_t_statistic;
+        tf_template.TF(roi_vis, 1, 3) = pial_white_diff_t_statistic;
+        tf_template.TF(roi_vis, 1, 4) = pial_white_diff_mean;
+        tf_template.TF(roi_vis, 1, 5) = pial_white_diff_var;
         
         % Freqs cell: {label, fmin, fmax} — the label column is what appears in the GUI slider
         tf_template.Freqs = {
-            't (Pial)',             sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
-            't (White)',            sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
-            't (P-W)',  sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
-            'Diff Mean (P-W)',         sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
-            'Diff Var (P-W)',     sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
+            't (S)',             sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
+            't (D)',            sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
+            't (S-D)',  sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
+            'Diff Mean (S-D)',         sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
+            'Diff Var (S-D)',     sTrial.Freqs{i,2}, sTrial.Freqs{i,3};
         };
         
         tf_template.History = {
