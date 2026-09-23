@@ -22,8 +22,11 @@ function burst_properties = threshold_high_amplitude_events(time, signal, freq, 
 %       freq    - Two-element vector [f_low, f_high] specifying the
 %                 bandpass range in Hz used for burst detection.
 %       params  - (Optional) struct with fields:
-%           .thresh       : Percentile for amplitude threshold (default: 75),
+%           .perc_thresh       : Percentile for amplitude threshold (default: 75),
 %                           applied to the Hilbert envelope.
+%           .custom_thresh: Supply custom threshold which to apply tp the
+%                           hilbert envelope. (Then perc_thresh is
+%                           ignored).
 %           .edge_space   : Edge exclusion window in seconds; bursts whose
 %                           samples fall within this distance of the start
 %                           or end of the signal are discarded (default: 1).
@@ -98,7 +101,8 @@ function burst_properties = threshold_high_amplitude_events(time, signal, freq, 
 %   See also: bandpass, hilbert, bwconncomp
 
 %% default params
-thresh = 75; %
+perc_thresh = 75; %
+custom_thresh = [];
 edge_space = 1;
 edge_cut = 0;
 merge = false;
@@ -108,8 +112,12 @@ min_burst_duration = []; % in s
 %% parse params
 if exist('params', 'var') && ~isempty(params)
 
-    if isfield(params, 'thresh')
-        thresh = params.thresh;
+    if isfield(params, 'perc_thresh')
+        perc_thresh = params.perc_thresh;
+    end
+
+    if isfield(params, 'custom_thresh')
+        custom_thresh = params.custom_thresh;
     end
 
     if isfield(params, 'vis')
@@ -153,7 +161,13 @@ filtered_signal = bandpass(signal(sfreq*edge_cut+1:end-sfreq*edge_cut), freq, sf
 % power
 hilbert_env = abs(hilbert(filtered_signal));
 % Get detection threshold. 
-detection_thresh = prctile(hilbert_env, thresh);
+
+% use custom threshold if supplied, otherwise fall back on percentile
+if isempty(custom_thresh)
+    detection_thresh = prctile(hilbert_env, perc_thresh);
+else
+    detection_thresh = custom_thresh;
+end
 
 if vis
     f = figure();
@@ -256,7 +270,7 @@ burst_properties.burst_rate = burst_rate;
 burst_properties.burst_durations = event_length_post; % already in ms
 
 used_params = struct( ...
-    'thresh', thresh, ...
+    'thresh', perc_thresh, ...
     'edge_space', edge_space, ...
     'edge_cut', edge_cut, ...
     'merge', merge, ...
