@@ -153,7 +153,7 @@ sfreq = round(1/(time(2)-time(1)));
 edge_space_samples = edge_space*sfreq;
 
 %% bandpass filter the signal
-no_signal = signal == 0;
+no_signal = signal(edge_cut*sfreq+1:end-edge_cut*sfreq) == 0;
 filtered_signal = bandpass(signal(sfreq*edge_cut+1:end-sfreq*edge_cut), freq, sfreq);
 
 %% threshold signal
