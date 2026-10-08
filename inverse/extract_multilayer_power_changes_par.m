@@ -19,6 +19,7 @@ gui_brainstorm('SetCurrentProtocol', protocol);
 
 tf_template = db_template('timefreq');
 tf_template.DataType = 'results';
+tf_template.HeadModelType = 'Surface';
 
 % sFiles cell of relaitves pathes to the trial data from the brainstorm db
 sData = in_bst_data(sFiles_short{1});
@@ -100,41 +101,49 @@ for ses=1:length(ses_ids)
     end
 
     subject_id = find(ismember(tokens, "data"), 1) + 1;
+    study_name = convertStringsToChars(tokens{subject_id + 1});
     subject_name = convertStringsToChars(tokens{subject_id});
     
+    % Get relevant study
+    study_filename = sprintf('%s/%s/brainstormstudy.mat', subject_name, study_name);
+    [study, study_id] = bst_get('Study', study_filename);
+    % remove links
+    kernels = study.Result(~contains({study.Result.FileName}, 'link|'));
+    ml_kernel = kernels(contains({kernels.Comment}, 'Multilayer')).FileName;
+    
     bstrm_out_path = fileparts(bstrm_path);
-    % find sr file
-    kernel_file = dir(fullfile(strjoin(tokens(1:subject_id+1), separator), '*KERNEL*.mat'));
-    if isempty(kernel_file)
-        fprintf('No source reconstruction found for %s. Cancelling process ...', subject_name);
-        return
-    else
-        if length(kernel_file) == 1
-            kernel_file = string(fullfile(kernel_file.folder, kernel_file.name));
-            used_SR(ses) = kernel_file;
-        else
-            % Prepare list of full file paths and display names
-            file_paths = fullfile({kernel_file.folder}, {kernel_file.name});
-            file_names = {kernel_file.name};
-            
-            [selection, is_ok] = listdlg('PromptString', sprintf('Multiple KERNEL files found for %s.\nSelect one:', subject_name), ...
-                                         'SelectionMode', 'single', ...
-                                         'ListString', file_names, ...
-                                         'Name', 'Choose Kernel File');
-            
-            if is_ok && ~isempty(selection)
-                kernel_file = string(file_paths{selection});
-                used_SR(ses) = kernel_file;
-                fprintf('Selected kernel file: %s\n', kernel_file);
-            else
-                fprintf('No kernel file selected for %s. Cancelling process ...\n', subject_name);
-                return
-            end
-        end
-    end
+    % % find sr file
+    % kernel_file = dir(fullfile(strjoin(tokens(1:subject_id+1), separator), '*KERNEL*.mat'));
+    % if isempty(kernel_file)
+    %     fprintf('No source reconstruction found for %s. Cancelling process ...\n', subject_name);
+    %     continue
+    % else
+    %     if length(kernel_file) == 1
+    %         kernel_file = string(fullfile(kernel_file.folder, kernel_file.name));
+    %         used_SR(ses) = kernel_file;
+    %     else
+    %         % Prepare list of full file paths and display names
+    %         file_paths = fullfile({kernel_file.folder}, {kernel_file.name});
+    %         file_names = {kernel_file.name};
+    % 
+    %         [selection, is_ok] = listdlg('PromptString', sprintf('Multiple KERNEL files found for %s.\nSelect one:', subject_name), ...
+    %                                      'SelectionMode', 'single', ...
+    %                                      'ListString', file_names, ...
+    %                                      'Name', 'Choose Kernel File');
+    % 
+    %         if is_ok && ~isempty(selection)
+    %             kernel_file = string(file_paths{selection});
+    %             used_SR(ses) = kernel_file;
+    %             fprintf('Selected kernel file: %s\n', kernel_file);
+    %         else
+    %             fprintf('No kernel file selected for %s. Cancelling process ...\n', subject_name);
+    %             return
+    %         end
+    %     end
+    % end
 
-    sKernel = load(kernel_file);
-    kernel_fname = file_short(char(kernel_file));
+    sKernel = load(file_fullpath(ml_kernel));
+    kernel_fname = file_short(char(ml_kernel));
     
     nSources = size(sKernel.ImagingKernel, 1);
     nVertices = nSources/2;
@@ -152,7 +161,7 @@ for ses=1:length(ses_ids)
     ses_template = tf_template;
     ses_template.HeadModelFile = sKernel.HeadModelFile;
     ses_template.SurfaceFile = sKernel.SurfaceFile;
-    ses_template.RowNames = [1:nSources];
+    ses_template.RowNames = 1:nSources;
     ses_template.Comment = ses_ids{ses};
     ses_template.TF = zeros(nSources, 1, length(jobs));
     ses_template.Time = [min(time), max(time)];
@@ -197,11 +206,11 @@ for ses=1:length(ses_ids)
                     'base_win', str2double(split(job_specs{3}, ',')), ...
                     'woi', str2double(split(job_specs{4}, ',')));
             
-                if min(job_struct.base_win) < min(time)
+                if round(min(job_struct.base_win), 3) < round(min(time), 3)
                     error('Baseline starts outside of trial. Baseline cannot be defined smaller then %.3f seconds (Job ID: %s)', min(time), job_struct.id);
                 end
             
-                if max(job_struct.base_win) > min(job_struct.woi)
+                if round(max(job_struct.base_win), 3) >= round(min(job_struct.woi), 3)
                     warning('Baseline and Window if Interest overlap. This is not recommended (Job ID: %s).', job_struct.id);
                     dlgTitle    = 'Overlap of Baseline and WOI';
                     dlgQuestion = 'Do you wish to continue?';
@@ -212,7 +221,7 @@ for ses=1:length(ses_ids)
                     end
                 end
             
-                if max(job_struct.woi) > max(time)
+                if round(max(job_struct.woi), 3) > round(max(time), 3)
                     error('Window of Interest ends outside of trial bound. WOI cannot be defined bigger then %.3f seconds (Job ID: %s)', max(time), job_struct.id);
                 end
                 

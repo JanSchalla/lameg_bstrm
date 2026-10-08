@@ -22,8 +22,11 @@ function burst_properties = threshold_high_amplitude_events(time, signal, freq, 
 %       freq    - Two-element vector [f_low, f_high] specifying the
 %                 bandpass range in Hz used for burst detection.
 %       params  - (Optional) struct with fields:
-%           .thresh       : Percentile for amplitude threshold (default: 75),
+%           .perc_thresh       : Percentile for amplitude threshold (default: 75),
 %                           applied to the Hilbert envelope.
+%           .custom_thresh: Supply custom threshold which to apply tp the
+%                           hilbert envelope. (Then perc_thresh is
+%                           ignored).
 %           .edge_space   : Edge exclusion window in seconds; bursts whose
 %                           samples fall within this distance of the start
 %                           or end of the signal are discarded (default: 1).
@@ -98,7 +101,8 @@ function burst_properties = threshold_high_amplitude_events(time, signal, freq, 
 %   See also: bandpass, hilbert, bwconncomp
 
 %% default params
-thresh = 75; %
+perc_thresh = 75; %
+custom_thresh = [];
 edge_space = 1;
 edge_cut = 0;
 merge = false;
@@ -108,8 +112,12 @@ min_burst_duration = []; % in s
 %% parse params
 if exist('params', 'var') && ~isempty(params)
 
-    if isfield(params, 'thresh')
-        thresh = params.thresh;
+    if isfield(params, 'perc_thresh')
+        perc_thresh = params.perc_thresh;
+    end
+
+    if isfield(params, 'custom_thresh')
+        custom_thresh = params.custom_thresh;
     end
 
     if isfield(params, 'vis')
@@ -145,6 +153,7 @@ sfreq = round(1/(time(2)-time(1)));
 edge_space_samples = edge_space*sfreq;
 
 %% bandpass filter the signal
+no_signal = signal(edge_cut*sfreq+1:end-edge_cut*sfreq) == 0;
 filtered_signal = bandpass(signal(sfreq*edge_cut+1:end-sfreq*edge_cut), freq, sfreq);
 
 %% threshold signal
@@ -152,8 +161,15 @@ filtered_signal = bandpass(signal(sfreq*edge_cut+1:end-sfreq*edge_cut), freq, sf
 % Here one can also take the square of the absolute to get the instantaneous
 % power
 hilbert_env = abs(hilbert(filtered_signal));
+hilbert_env(no_signal) = nan; % Set 0s to nan to not bias percentile threshold
+
 % Get detection threshold. 
-detection_thresh = prctile(hilbert_env, thresh);
+% use custom threshold if supplied, otherwise fall back on percentile
+if isempty(custom_thresh)
+    detection_thresh = prctile(hilbert_env, perc_thresh);
+else
+    detection_thresh = custom_thresh;
+end
 
 if vis
     f = figure();
@@ -212,7 +228,8 @@ end
 event_length_pre = zeros(length(CC.NumObjects), 1);
 event_length_post = [];
 event_idx = [];
-
+max_burst_amplitude = [];
+mean_burst_amplitude = [];
 for i = 1:CC.NumObjects
     idx = CC.PixelIdxList{i};
     %get burst length in ms before filtering too short ones out
@@ -226,14 +243,16 @@ for i = 1:CC.NumObjects
         %get length of suffiently long bursts
         event_length_post(end+1) = (numel(idx)/sfreq)*1000; %converting duration of burst to ms
         
-        event = signal(idx+sfreq*edge_cut);
-        event = event - mean(event);
+        event = hilbert_env(idx-sfreq*edge_cut);
+
+        max_burst_amplitude(end+1) = max(event);
+        mean_burst_amplitude(end+1) = mean(event);
         
         % Get burst idx depending on specified method
         if strcmp(burst_epoch, 'first_crossing')
             event_idx(end+1) = idx(1); % Take beginning of the burst
         elseif strcmp(burst_epoch, 'max_amplitude')
-            [~, relative_idx] = max(abs(event)); % find peak burst activity
+            [~, relative_idx] = max(event); % find peak burst activity
             event_idx(end+1) = idx(relative_idx); % get global index of that peak idx.
         elseif strcmp(burst_epoch, 'end_crossing')
             event_idx(end+1) = idx(end); % Take end of the burst
@@ -249,6 +268,8 @@ burst_proportion = sum(burst_vec) / length(burst_vec); % Same as "fractional occ
 burst_rate = length(event_idx)/(length(signal)/sfreq); % bursts per second
 
 % Fill output structure
+burst_properties.burst_amplitudes_max = max_burst_amplitude;
+burst_properties.burst_amplitudes_mean = mean_burst_amplitude;
 burst_properties.postproc_burst_vector = burst_vec;
 burst_properties.postproc_event_idx = event_idx;
 burst_properties.burst_proportion = burst_proportion;
@@ -256,7 +277,7 @@ burst_properties.burst_rate = burst_rate;
 burst_properties.burst_durations = event_length_post; % already in ms
 
 used_params = struct( ...
-    'thresh', thresh, ...
+    'thresh', perc_thresh, ...
     'edge_space', edge_space, ...
     'edge_cut', edge_cut, ...
     'merge', merge, ...
