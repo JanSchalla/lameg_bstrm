@@ -228,7 +228,8 @@ end
 event_length_pre = zeros(length(CC.NumObjects), 1);
 event_length_post = [];
 event_idx = [];
-
+max_burst_amplitude = [];
+mean_burst_amplitude = [];
 for i = 1:CC.NumObjects
     idx = CC.PixelIdxList{i};
     %get burst length in ms before filtering too short ones out
@@ -243,6 +244,9 @@ for i = 1:CC.NumObjects
         event_length_post(end+1) = (numel(idx)/sfreq)*1000; %converting duration of burst to ms
         
         event = hilbert_env(idx-sfreq*edge_cut);
+
+        max_burst_amplitude(end+1) = max(event);
+        mean_burst_amplitude(end+1) = mean(event);
         
         % Get burst idx depending on specified method
         if strcmp(burst_epoch, 'first_crossing')
@@ -264,6 +268,8 @@ burst_proportion = sum(burst_vec) / length(burst_vec); % Same as "fractional occ
 burst_rate = length(event_idx)/(length(signal)/sfreq); % bursts per second
 
 % Fill output structure
+burst_properties.burst_amplitudes_max = max_burst_amplitude;
+burst_properties.burst_amplitudes_mean = mean_burst_amplitude;
 burst_properties.postproc_burst_vector = burst_vec;
 burst_properties.postproc_event_idx = event_idx;
 burst_properties.burst_proportion = burst_proportion;
